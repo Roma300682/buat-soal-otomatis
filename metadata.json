@@ -1,0 +1,6 @@
+{
+  "name": "EvaluasiAI — Studio Soal PG & Anates Kurikulum Merdeka",
+  "description": "Sistem penyusunan soal pilihan ganda sistematis berbasis Materi Pokok & Kurikulum Merdeka (CP, TP, ATP) dilengkapi Kisi-Kisi, Kartu Soal resmi, Simulasi Ujian, dan Analisis Butir Soal Statistik Empiris.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
