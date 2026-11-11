@@ -1,8 +1,245 @@
 /**
- * Generator cadangan deterministik berbasis kaidah Kurikulum Merdeka & Pusmendik
- * yang aktif secara otomatis apabila seluruh kuota harian Free Tier Gemini API (HTTP 429) habis.
- * Mampu mengekstrak konsep dari Materi Pokok & Ringkasan Materi pengguna untuk menyusun hingga 50 butir soal.
+ * Mesin Penyusun Kurikulum Merdeka (CP, TP, ATP) & Generator Butir Soal Pilihan Ganda Sistematis.
+ * Menjamin penurunan CP, TP, ATP, Ringkasan Materi, Kisi-Kisi ABCD, dan Paket Soal (1–50 soal)
+ * berjalan 100% bebas error baik secara mandiri maupun sebagai pendamping Gemini AI.
  */
+
+interface TopicKnowledgeTemplate {
+  keywords: RegExp;
+  subTopics: string[];
+  cpFocus: string;
+  tpItems: string[];
+  atpItems: string[];
+  summaryText: string;
+}
+
+const ACCOUNTING_TOPIC_TEMPLATES: TopicKnowledgeTemplate[] = [
+  {
+    keywords: /kas kecil|petty cash|imprest|fluktuasi/i,
+    subTopics: [
+      'Pembentukan Dana Kas Kecil & Dokumen Bukti Kas Kecil (BKK/BPKK)',
+      'Pencatatan Sistem Dana Tetap (Imprest Fund System)',
+      'Pencatatan Sistem Dana Berfluktuasi (Fluctuating Fund System)',
+      'Perhitungan Selisih Kas Kecil (Cash Short and Over) & Jurnal Penyesuaian Akhir Periode',
+    ],
+    cpFocus:
+      'mengelola administrasi dana kas kecil (petty cash), membedakan metode pencatatan dana tetap (imprest fund system) dan metode fluktuasi (fluctuating fund system), melakukan pemeriksaan fisik kas kecil (cash opname), serta menyusun jurnal penyesuaian selisih kas kecil secara akurat',
+    tpItems: [
+      '1. Mengidentifikasi karakteristik, tujuan pembentukan, dokumen mutasi, dan prosedur pengendalian internal dana kas kecil (petty cash).',
+      '2. Menerapkan pencatatan transaksi pembentukan, pengeluaran, dan pengisian kembali (replenishment) kas kecil menggunakan Metode Dana Tetap (Imprest) dan Metode Fluktuasi.',
+      '3. Menganalisis penyebab terjadinya selisih kas kecil (kas lebih/kurang) berdasarkan berita acara pemeriksaan fisik kas (cash opname).',
+      '4. Mengevaluasi dampak transaksi kas kecil yang belum diisi kembali pada akhir periode melalui penyusunan Ayat Jurnal Penyesuaian.',
+    ],
+    atpItems: [
+      'ATP 1 (L1 - C1/C2): Memahami fungsi dana kas kecil, kelengkapan bukti pengeluaran kas kecil, serta perbedaan prinsip metode Imprest dan Fluktuasi.',
+      'ATP 2 (L2 - C3): Mencatat transaksi pembentukan, pemakaian, dan pengisian kembali kas kecil ke dalam buku kas kecil dan jurnal umum.',
+      'ATP 3 (L3 - C4): Menganalisis selisih antara saldo buku kas kecil dan perhitungan fisik uang tunai (cash opname) ke dalam akun Selisih Kas.',
+      'ATP 4 (L3 - C5): Mengevaluasi penyajian saldo kas kecil pada Laporan Posisi Keuangan dan membuat jurnal penyesuaian akhir periode pada metode Imprest.',
+    ],
+    summaryText:
+      'Dana Kas Kecil (Petty Cash) adalah uang tunai yang disediakan perusahaan untuk membayar pengeluaran operasional yang jumlahnya relatif kecil dan tidak ekonomis bila dibayar dengan cek. Terdapat dua metode pencatatan:\n1) Metode Dana Tetap (Imprest Fund System): saat pengeluaran kas kecil tidak langsung dijurnal (hanya diarsipkan buktinya); penjurnalan beban dilakukan saat pengisian kembali (mendebit akun Beban-beban dan mengkredit Kas di Bank). Saldo akun Kas Kecil selalu tetap kecuali ada perubahan kebijakan plafon.\n2) Metode Fluktuasi (Fluctuating Fund System): setiap terjadi pengeluaran langsung dijurnal dengan mendebit akun Beban dan mengkredit Kas Kecil, sehingga saldo buku besar Kas Kecil berubah-ubah sesuai mutasi.\n3) Pemeriksaan fisik (cash opname): jika kas fisik > saldo buku terjadi Selisih Kas Lebih (kredit), jika kas fisik < saldo buku terjadi Selisih Kas Kurang (debit).',
+  },
+  {
+    keywords: /rekonsiliasi bank|kas di bank|rekening koran|outstanding check|deposit in transit/i,
+    subTopics: [
+      'Identifikasi Item Rekonsiliasi Bank (Setoran dalam Perjalanan & Cek Beredar)',
+      'Analisis Jasa Giro, Beban Administrasi Bank, dan Cek Kosong (NSF Check)',
+      'Penyusunan Laporan Rekonsiliasi Bank Saldo Benar (2 Kolom & 4 Kolom)',
+      'Penyusunan Ayat Jurnal Penyesuaian Hasil Rekonsiliasi Bank',
+    ],
+    cpFocus:
+      'menganalisis perbedaan antara catatan Kas di Bank menurut perusahaan dan Rekening Koran bank, menyusun laporan rekonsiliasi bank untuk menentukan saldo kas yang benar, serta mencatat ayat jurnal penyesuaian yang diperlukan',
+    tpItems: [
+      '1. Mengidentifikasi faktor-faktor penyebab perbedaan saldo kas menurut catatan perusahaan dan saldo menurut rekening koran bank.',
+      '2. Menghitung saldo kas yang benar (adjusted cash balance) melalui penyusunan tabel Rekonsiliasi Bank.',
+      '3. Menganalisis perlakuan item rekonsiliasi seperti deposit in transit, outstanding check, inkaso bank, NSF check, dan koreksi kesalahan pencatatan.',
+      '4. Menyusun Ayat Jurnal Penyesuaian untuk memutakhirkan saldo akun Kas di Bank pada buku besar perusahaan.',
+    ],
+    atpItems: [
+      'ATP 1 (L1 - C1/C2): Mengidentifikasi pengertian dan komponen rekonsiliasi bank (setoran dalam perjalanan, cek beredar, nota debit/kredit bank).',
+      'ATP 2 (L2 - C3): Menghitung penyesuaian saldo kas sisi bank dan sisi perusahaan hingga mencapai saldo kas yang benar.',
+      'ATP 3 (L3 - C4): Menganalisis dampak kesalahan pencatatan nominal cek oleh pemegang buku maupun pihak bank.',
+      'ATP 4 (L3 - C5): Mengevaluasi hasil rekonsiliasi bank dan menyusun jurnal penyesuaian hanya untuk pos-pos yang memengaruhi catatan perusahaan.',
+    ],
+    summaryText:
+      'Rekonsiliasi Bank adalah prosedur pengendalian internal untuk mencocokkan saldo akun Kas di Bank menurut catatan perusahaan dengan saldo menurut Rekening Koran bank.\n• Penyesuaian pada sisi Saldo Bank: (+) Setoran dalam perjalanan (Deposit in Transit), (-) Cek yang masih beredar (Outstanding Check), (+/-) Koreksi kesalahan bank.\n• Penyesuaian pada sisi Saldo Perusahaan: (+) Penerimaan tagihan/inkaso oleh bank & Pendapatan Jasa Giro/Bunga Bank, (-) Beban Administrasi Bank & Cek Kosong (NSF Check), (+/-) Koreksi kesalahan pencatatan perusahaan.\n• Hanya item penyesuaian pada sisi catatan perusahaan yang wajib dibuatkan Ayat Jurnal Penyesuaian.',
+  },
+  {
+    keywords: /piutang|receivable|cadangan kerugian|penghapusan piutang|aging schedule|wesel tagih/i,
+    subTopics: [
+      'Pengakuan & Mutasi Piutang Usaha serta Kartu Piutang',
+      'Penghapusan Piutang Metode Langsung (Direct Write-Off) vs Metode Cadangan (Allowance)',
+      'Analisis Umur Piutang (Aging Schedule) & Estimasi Cadangan Kerugian Piutang',
+      'Penyajian Nilai Realisasi Bersih (Net Realizable Value) Piutang di Neraca',
+    ],
+    cpFocus:
+      'mengelola kartu piutang, melakukan pencatatan mutasi piutang usaha dan wesel tagih, menghitung taksiran kerugian piutang tak tertagih dengan metode langsung maupun metode cadangan (analisis umur piutang), serta menyajikan nilai realisasi bersih piutang di Laporan Posisi Keuangan',
+    tpItems: [
+      '1. Menjelaskan klasifikasi piutang, prosedur pencatatan kartu piutang, serta konfirmasi saldo piutang pelanggan.',
+      '2. Menerapkan penjurnalan penghapusan piutang tak tertagih dan penerimaan kembali piutang yang telah dihapus dengan Metode Langsung dan Metode Cadangan.',
+      '3. Menganalisis daftar umur piutang (aging schedule) untuk menentukan beban kerugian piutang dan saldo akhir Cadangan Kerugian Piutang (CKP).',
+      '4. Mengevaluasi nilai realisasi bersih (Net Realizable Value) piutang usaha pada Laporan Posisi Keuangan.',
+    ],
+    atpItems: [
+      'ATP 1 (L1 - C1/C2): Membedakan karakteristik Metode Penghapusan Langsung dan Metode Cadangan (Allowance Method) pada akuntansi piutang.',
+      'ATP 2 (L2 - C3): Mencatat transaksi penghapusan piutang dan pemulihan piutang yang telah dihapus ke dalam jurnal umum.',
+      'ATP 3 (L3 - C4): Menganalisis tabel umur piutang dan pengaruh saldo awal CKP (debit/kredit) terhadap besarnya penyesuaian Beban Kerugian Piutang.',
+      'ATP 4 (L3 - C5): Mengevaluasi kewajaran penyajian Piutang Bersih (Net Realizable Value) dan dampaknya terhadap laba bersih perusahaan.',
+    ],
+    summaryText:
+      'Akuntansi Piutang Usaha mengatur pengakuan, pengukuran, dan penilaian tagihan perusahaan kepada pelanggan:\n1) Metode Langsung (Direct Write-Off): kerugian baru diakui saat piutang benar-benar dipastikan tidak tertagih (Debit: Beban Kerugian Piutang, Kredit: Piutang Usaha).\n2) Metode Cadangan (Allowance Method): akhir periode dilakukan taksiran kerugian (Debit: Beban Kerugian Piutang, Kredit: Cadangan Kerugian Piutang / CKP).\n3) Pendekatan Neraca (Analisis Umur Piutang): nilai hasil perhitungan Aging Schedule merupakan target saldo akhir CKP, sehingga nilai jurnal penyesuaian harus memperhitungkan saldo CKP sebelum penyesuaian.\n4) Nilai Realisasi Bersih (NRV) = Saldo Piutang Usaha dikurangi Saldo Akhir Cadangan Kerugian Piutang.',
+  },
+  {
+    keywords: /persediaan|inventory|fifo|lifo|average|rata-rata tertimbang|kartu persediaan|perpetual|periodik/i,
+    subTopics: [
+      'Sistem Pencatatan Persediaan Fisik (Periodik) vs Perpetual',
+      'Perhitungan Nilai Persediaan Metode FIFO (MPKP)',
+      'Perhitungan Nilai Persediaan Metode Rata-Rata Tertimbang (Weighted Average)',
+      'Evaluasi Dampak Metode Penilaian Persediaan terhadap HPP dan Laba Kotor',
+    ],
+    cpFocus:
+      'menerapkan pencatatan persediaan barang dagang dengan sistem periodik dan perpetual, menghitung harga pokok penjualan (HPP) dan nilai persediaan akhir menggunakan metode FIFO dan Rata-Rata Tertimbang, serta mengevaluasi dampaknya terhadap laporan keuangan',
+    tpItems: [
+      '1. Membedakan mekanisme pencatatan transaksi pembelian, retur, dan penjualan barang dagang antara Sistem Periodik (Fisik) dan Sistem Perpetual.',
+      '2. Menghitung nilai Harga Pokok Penjualan (HPP) dan Persediaan Akhir pada Kartu Persediaan menggunakan metode FIFO (MPKP) dan Rata-Rata Tertimbang (Average).',
+      '3. Menganalisis penyesuaian nilai persediaan berdasarkan prinsip nilai terendah antara biaya perolehan dan nilai realisasi bersih (LCNRV).',
+      '4. Mengevaluasi pengaruh pemilihan metode penilaian persediaan terhadap Laba Kotor dan Pajak Penghasilan pada kondisi inflasi.',
+    ],
+    atpItems: [
+      'ATP 1 (L1 - C1/C2): Mengidentifikasi perbedaan jurnal transaksi barang dagang pada sistem pencatatan Fisik (Periodik) dan Perpetual.',
+      'ATP 2 (L2 - C3): Menyusun kartu persediaan barang dagang dan menghitung HPP dengan metode FIFO serta Rata-Rata Tertimbang.',
+      'ATP 3 (L3 - C4): Menganalisis selisih fisik persediaan (stock opname) dan menyusun ayat jurnal penyesuaian persediaan.',
+      'ATP 4 (L3 - C5): Mengevaluasi perbandingan Laba Kotor dan nilai persediaan akhir di Neraca antara metode FIFO dan Rata-Rata.',
+    ],
+    summaryText:
+      'Akuntansi Persediaan mengatur pencatatan dan penilaian barang dagang:\n• Sistem Periodik (Fisik): mutasi pembelian dicatat ke akun Pembelian; HPP baru dihitung di akhir periode setelah stock opname.\n• Sistem Perpetual: setiap pembelian dan penjualan langsung memutakhirkan akun Persediaan Barang Dagang dan Harga Pokok Penjualan pada Kartu Persediaan.\n• Metode FIFO (First-In First-Out / MPKP): barang yang pertama masuk diasumsikan pertama keluar (dijual), sehingga persediaan akhir dinilai berdasarkan harga pembelian terbaru.\n• Metode Rata-Rata (Average): harga pokok per unit dihitung kembali berdasarkan rata-rata tertimbang biaya perolehan barang yang tersedia untuk dijual.',
+  },
+  {
+    keywords: /aset tetap|aktiva tetap|penyusutan|depresiasi|garis lurus|saldo menurun|jumlah angka tahun|pelepasan aset/i,
+    subTopics: [
+      'Penentuan Harga Perolehan Aset Tetap (Historical Cost)',
+      'Perhitungan Beban Penyusutan Metode Garis Lurus & Saldo Menurun Ganda',
+      'Perhitungan Penyusutan Metode Jumlah Angka Tahun & Satuan Hasil Produksi',
+      'Analisis Penghentian, Penjualan, dan Pertukaran Aset Tetap',
+    ],
+    cpFocus:
+      'menentukan harga perolehan aset tetap, menghitung beban penyusutan dengan berbagai metode sesuai SAK, mencatat pengeluaran modal (capital expenditure) dan pengeluaran pendapatan (revenue expenditure), serta menganalisis laba/rugi pelepasan atau pertukaran aset tetap',
+    tpItems: [
+      '1. Menentukan komponen biaya yang dikapitalisasi ke dalam Harga Perolehan Aset Tetap serta membedakan pengeluaran modal dan pengeluaran pendapatan.',
+      '2. Menghitung beban penyusutan tahunan dan penyusutan parsial menggunakan metode Garis Lurus, Saldo Menurun Ganda, Jumlah Angka Tahun, dan Unit Produksi.',
+      '3. Menganalisis nilai buku aset tetap (Book Value) dan menyusun jurnal penyesuaian beban penyusutan akhir periode.',
+      '4. Mengevaluasi laba atau rugi atas penjualan, penghentian, maupun pertukaran aset tetap.',
+    ],
+    atpItems: [
+      'ATP 1 (L1 - C1/C2): Mengidentifikasi karakteristik aset tetap, komponen harga perolehan, serta perbedaan Capital Expenditure dan Revenue Expenditure.',
+      'ATP 2 (L2 - C3): Menghitung beban penyusutan dan akumulasi penyusutan aset tetap dengan berbagai metode depresiasi.',
+      'ATP 3 (L3 - C4): Menganalisis akumulasi penyusutan dan nilai buku aset tetap pada saat terjadi penjualan atau pertukaran aset.',
+      'ATP 4 (L3 - C5): Mengevaluasi ketepatan pencatatan laba/rugi pelepasan aset tetap dan penyajiannya pada Laporan Posisi Keuangan.',
+    ],
+    summaryText:
+      'Akuntansi Aset Tetap mencakup pengakuan harga perolehan, alokasi penyusutan, dan penghentian pengakuan:\n1) Harga Perolehan mencakup harga beli ditambah seluruh biaya yang dapat diatribusikan langsung (biaya angkut, instalasi, bea masuk, uji coba) hingga aset siap digunakan.\n2) Metode Garis Lurus: Penyusutan = (Harga Perolehan - Nilai Residu) / Umur Ekonomis.\n3) Metode Saldo Menurun Ganda: Tarif = 2 x (100% / Umur Ekonomis) dikalikan Nilai Buku Awal Tahun (tanpa dikurangi residu di awal).\n4) Nilai Buku = Harga Perolehan - Akumulasi Penyusutan. Saat aset dijual, selisih antara harga jual bersih dengan Nilai Buku diakui sebagai Laba/Rugi Pelepasan Aset Tetap.',
+  },
+  {
+    keywords: /harga pokok produksi|akuntansi biaya|manufaktur|biaya bahan baku|biaya tenaga kerja|overhead pabrik|bop|harga pokok pesanan|harga pokok proses/i,
+    subTopics: [
+      'Klasifikasi Biaya Produksi (BBB, BTKL, dan BOP) & Biaya Non-Produksi',
+      'Perhitungan Pemakaian Bahan Baku & Pembebanan BOP Tarif Ditentukan di Muka',
+      'Penyusunan Laporan Harga Pokok Produksi (Cost of Goods Manufactured)',
+      'Evaluasi Kartu Harga Pokok Pesanan (Job Order Costing) & Laba Kotor Industri',
+    ],
+    cpFocus:
+      'mengklasifikasikan elemen biaya produksi pada perusahaan manufaktur, menghitung biaya bahan baku, tenaga kerja langsung, dan overhead pabrik, menyusun Kartu Harga Pokok Pesanan serta Laporan Harga Pokok Produksi, hingga mengevaluasi efisiensi biaya produksi',
+    tpItems: [
+      '1. Mengklasifikasikan Biaya Bahan Baku (BBB), Biaya Tenaga Kerja Langsung (BTKL), dan Biaya Overhead Pabrik (BOP) serta membedakan Biaya Utama (Prime Cost) dan Biaya Konversi (Conversion Cost).',
+      '2. Menghitung total biaya produksi periode berjalan dan membebankan BOP berdasarkan tarif yang ditentukan di muka.',
+      '3. Menganalisis mutasi Persediaan Barang Dalam Proses (WIP) awal dan akhir untuk menyusun Laporan Harga Pokok Produksi.',
+      '4. Mengevaluasi selisih BOP (under/over-applied overhead) dan menghitung Harga Pokok Penjualan pada perusahaan manufaktur.',
+    ],
+    atpItems: [
+      'ATP 1 (L1 - C1/C2): Mengklasifikasikan unsur biaya produksi langsung/tidak langsung, Prime Cost, dan Conversion Cost.',
+      'ATP 2 (L2 - C3): Menghitung pemakaian bahan baku, pembebanan BOP, dan total biaya produksi pada Kartu Harga Pokok Pesanan.',
+      'ATP 3 (L3 - C4): Menganalisis Laporan Harga Pokok Produksi dengan memperhitungkan Barang Dalam Proses (BDP) awal dan akhir.',
+      'ATP 4 (L3 - C5): Mengevaluasi selisih BOP sesungguhnya dengan BOP dibebankan serta dampaknya terhadap Harga Pokok Penjualan.',
+    ],
+    summaryText:
+      'Akuntansi Biaya & Manufaktur mengolah tiga komponen biaya produksi:\n1) Biaya Utama (Prime Cost) = Biaya Bahan Baku (BBB) + Biaya Tenaga Kerja Langsung (BTKL).\n2) Biaya Konversi (Conversion Cost) = BTKL + Biaya Overhead Pabrik (BOP).\n3) Total Biaya Produksi = Pemakaian BBB + BTKL + BOP Dibebankan.\n4) Harga Pokok Produksi (Cost of Goods Manufactured) = Total Biaya Produksi + Persediaan BDP Awal - Persediaan BDP Akhir.\n5) Harga Pokok Penjualan Manufaktur = Persediaan Produk Jadi Awal + Harga Pokok Produksi - Persediaan Produk Jadi Akhir.',
+  },
+  {
+    keywords: /pajak|pph|ppn|npwp|spt|faktur pajak|pkp|ptkp|perpajakan/i,
+    subTopics: [
+      'Ketentuan Umum Perpajakan (KUP) & Perhitungan Penghasilan Tidak Kena Pajak (PTKP)',
+      'Perhitungan PPh Pasal 21 Pegawai Tetap & Tarif Progresif Pasal 17 UU HPP',
+      'Mekanisme PPN Masukan vs PPN Keluaran serta Faktur Pajak PKP',
+      'Rekonsiliasi Fiskal (Koreksi Fiskal Positif & Negatif) PPh Badan',
+    ],
+    cpFocus:
+      'memahami ketentuan umum perpajakan di Indonesia, menghitung Pajak Penghasilan (PPh Pasal 21 dan PPh Badan) serta Pajak Pertambahan Nilai (PPN), menyusun jurnal perpajakan, dan menganalisis koreksi fiskal positif serta negatif',
+    tpItems: [
+      '1. Menjelaskan hak dan kewajiban Wajib Pajak, tarif PTKP, serta tarif progresif Pajak Penghasilan sesuai UU Harmonisasi Peraturan Perpajakan (UU HPP).',
+      '2. Menghitung PPh Pasal 21 terutang atas penghasilan pegawai tetap dengan memperhitungkan biaya jabatan, iuran pensiun, dan status PTKP.',
+      '3. Menganalisis mekanisme pengkreditan Pajak Masukan terhadap Pajak Keluaran untuk menentukan PPN Kurang Bayar atau Lebih Bayar.',
+      '4. Mengevaluasi laporan laba rugi komersial melalui rekonsiliasi fiskal (koreksi positif dan negatif) untuk menghitung Penghasilan Kena Pajak Badan.',
+    ],
+    atpItems: [
+      'ATP 1 (L1 - C1/C2): Mengidentifikasi subjek/objek pajak, besaran PTKP, dan lapisan tarif progresif PPh.',
+      'ATP 2 (L2 - C3): Menghitung Penghasilan Kena Pajak (PKP) dan PPh Pasal 21 terutang serta menjurnal pemotongan pajak.',
+      'ATP 3 (L3 - C4): Menganalisis selisih PPN Keluaran dan PPN Masukan serta perlakuan Faktur Pajak.',
+      'ATP 4 (L3 - C5): Mengevaluasi koreksi fiskal positif dan negatif pada rekonsiliasi laba komersial menjadi laba fiskal.',
+    ],
+    summaryText:
+      'Administrasi Perpajakan mencakup perhitungan, pemotongan, penyetoran, dan pelaporan pajak:\n• PTKP Wajib Pajak Orang Pribadi: Rp54.000.000/tahun untuk WP sendiri, tambahan Rp4.500.000 untuk status kawin, dan Rp4.500.000 per tanggungan (maksimal 3 tanggungan). Biaya Jabatan = 5% dari penghasilan bruto (maksimal Rp6.000.000/tahun).\n• Tarif PPh OP (Pasal 17 UU HPP): 0–60 juta = 5%; >60–250 juta = 15%; >250–500 juta = 25%; >500 juta–5 miliar = 30%; >5 miliar = 35%.\n• Mekanisme PPN: Jika PPN Keluaran > PPN Masukan maka terjadi PPN Kurang Bayar yang wajib disetor ke kas negara; jika PPN Keluaran < PPN Masukan terjadi PPN Lebih Bayar (dikompensasi/direstitusi).\n• Rekonsiliasi Fiskal: Koreksi Fiskal Positif menambah laba fiskal (beban yang tidak diakui pajak), sedangkan Koreksi Fiskal Negatif mengurangi laba fiskal.',
+  },
+  {
+    keywords: /perusahaan dagang|jurnal khusus|hpp|harga pokok penjualan|syarat pembayaran|potongan pembelian|potongan penjualan/i,
+    subTopics: [
+      'Pencatatan Dokumen Transaksi Dagang ke Jurnal Khusus (Pembelian, Penjualan, JKM, JKK)',
+      'Perhitungan Potongan Tunai (Termin 2/10, n/30) & Syarat Penyerahan Barang (FOB)',
+      'Perhitungan Harga Pokok Penjualan (HPP) & Laba Kotor Perusahaan Dagang',
+      'Analisis Jurnal Penyesuaian Persediaan (Metode Ikhtisar Laba Rugi vs Metode HPP)',
+    ],
+    cpFocus:
+      'menganalisis siklus akuntansi perusahaan dagang mulai dari pencatatan dokumen transaksi ke dalam jurnal khusus dan buku besar pembantu, menghitung Harga Pokok Penjualan (HPP), menyusun ayat jurnal penyesuaian persediaan, hingga menyajikan laporan keuangan perusahaan dagang',
+    tpItems: [
+      '1. Mengidentifikasi karakteristik perusahaan dagang, syarat pembayaran (termin kredit), syarat penyerahan barang (FOB Shipping Point & Destination), dan jenis jurnal khusus.',
+      '2. Menerapkan pencatatan transaksi ke dalam Jurnal Pembelian, Jurnal Penjualan, Jurnal Penerimaan Kas, Jurnal Pengeluaran Kas, serta Buku Besar Pembantu.',
+      '3. Menghitung Harga Pokok Penjualan (HPP), Penjualan Bersih, dan Laba Kotor dari data keuangan perusahaan dagang.',
+      '4. Menganalisis Ayat Jurnal Penyesuaian persediaan barang dagang dengan pendekatan Ikhtisar Laba Rugi maupun pendekatan HPP serta mengevaluasi kewajaran laporan keuangan.',
+    ],
+    atpItems: [
+      'ATP 1 (L1 - C1/C2): Memahami syarat penyerahan barang, termin pembayaran kredit, dan pemetaan transaksi ke dalam 5 jenis jurnal.',
+      'ATP 2 (L2 - C3): Menghitung nilai pelunasan piutang/utang dalam masa potongan dan menghitung Harga Pokok Penjualan (HPP).',
+      'ATP 3 (L3 - C4): Menganalisis jurnal penyesuaian persediaan barang dagang dan pengisian kolom Kertas Kerja (Worksheet).',
+      'ATP 4 (L3 - C5): Mengevaluasi dampak kesalahan perhitungan persediaan akhir terhadap HPP, Laba Bersih, dan Ekuitas.',
+    ],
+    summaryText:
+      'Siklus Akuntansi Perusahaan Dagang memiliki karakteristik utama berupa aktivitas pembelian dan penjualan barang dagang tanpa mengubah bentuk barang:\n1) Jurnal Khusus terdiri dari Jurnal Pembelian (pembelian kredit), Jurnal Penjualan (penjualan kredit), Jurnal Penerimaan Kas (JKM), Jurnal Pengeluaran Kas (JKK), dan Jurnal Umum (retur/penyesuaian).\n2) Rumus Pembelian Bersih = Pembelian + Beban Angkut Pembelian - (Retur Pembelian + Potongan Pembelian).\n3) Rumus Barang Tersedia Untuk Dijual (BTUD) = Persediaan Awal + Pembelian Bersih.\n4) Rumus Harga Pokok Penjualan (HPP) = BTUD - Persediaan Akhir.\n5) Laba Kotor = Penjualan Bersih - HPP.',
+  },
+  {
+    keywords: /perusahaan jasa|persamaan dasar|jurnal umum|buku besar|neraca saldo|jurnal penyesuaian|kertas kerja|jurnal penutup/i,
+    subTopics: [
+      'Analisis Bukti Transaksi & Keseimbangan Persamaan Dasar Akuntansi (A = L + E)',
+      'Pencatatan Jurnal Umum & Pemindahbukuan (Posting) ke Buku Besar',
+      'Penyusunan Ayat Jurnal Penyesuaian (Beban Dibayar di Muka, Perlengkapan, Akrual)',
+      'Penyusunan Laporan Keuangan, Jurnal Penutup, dan Neraca Saldo Setelah Penutupan',
+    ],
+    cpFocus:
+      'menerapkan siklus akuntansi perusahaan jasa secara utuh mulai dari analisis dokumen transaksi ke dalam persamaan dasar akuntansi dan jurnal umum, posting ke buku besar, penyusunan neraca saldo, jurnal penyesuaian, kertas kerja, hingga penyajian laporan keuangan dan jurnal penutup',
+    tpItems: [
+      '1. Menjelaskan aturan saldo normal akun (Aset, Liabilitas, Ekuitas, Pendapatan, dan Beban) serta menganalisis dampak transaksi terhadap Persamaan Dasar Akuntansi.',
+      '2. Menerapkan prosedur penjurnalan transaksi operasional perusahaan jasa ke dalam Jurnal Umum dan pemindahbukuan (posting) ke Buku Besar.',
+      '3. Menganalisis data penyesuaian akhir periode (pemakaian perlengkapan, beban dibayar di muka, penyusutan aset tetap, pendapatan/beban akrual) ke dalam Ayat Jurnal Penyesuaian.',
+      '4. Mengevaluasi penyusunan Laporan Laba Rugi, Laporan Perubahan Ekuitas, Laporan Posisi Keuangan, serta Jurnal Penutup.',
+    ],
+    atpItems: [
+      'ATP 1 (L1 - C1/C2): Mengidentifikasi bukti transaksi, klasifikasi akun riil dan nominal, serta mekanisme saldo normal Debit-Kredit.',
+      'ATP 2 (L2 - C3): Mencatat transaksi ke dalam Jurnal Umum, memposting ke Buku Besar, dan menyusun Neraca Saldo.',
+      'ATP 3 (L3 - C4): Menganalisis Ayat Jurnal Penyesuaian dengan pendekatan Neraca (Harta/Utang) maupun pendekatan Laba Rugi (Beban/Pendapatan).',
+      'ATP 4 (L3 - C5): Mengevaluasi dampak kesalahan pencatatan penyesuaian terhadap laporan keuangan dan menyusun Jurnal Penutup.',
+    ],
+    summaryText:
+      'Siklus Akuntansi Perusahaan Jasa berlandaskan pada persamaan dasar Aset = Liabilitas + Ekuitas:\n1) Aturan Saldo Normal: Aset & Beban bertambah di Debit (saldo normal Debit); Liabilitas, Ekuitas, & Pendapatan bertambah di Kredit (saldo normal Kredit).\n2) Jurnal Penyesuaian Beban Dibayar di Muka: jika saat bayar dicatat sebagai Harta (Sewa Dibayar di Muka), maka penyesuaiannya sebesar yang TELAH TERPAKAI; jika saat bayar dicatat sebagai Beban (Beban Sewa), maka penyesuaiannya sebesar yang BELUM TERPAKAI.\n3) Jurnal Penutup menutup akun nominal (Pendapatan, Beban, Ikhtisar Laba Rugi, dan Prive) sehingga pada Neraca Saldo Setelah Penutupan hanya tersisa akun-akun riil (Aset, Liabilitas, dan Modal Akhir).',
+  },
+];
 
 export function buildFallbackCurriculum(params: {
   mataPelajaran?: string;
@@ -11,30 +248,63 @@ export function buildFallbackCurriculum(params: {
   materiPokok: string;
   ringkasanMateri?: string;
 }) {
-  const mapel = params.mataPelajaran || 'Akuntansi & Keuangan Lembaga';
-  const fase = params.jenjangFase || 'Fase F (Kelas 11-12 SMA/SMK)';
-  const topik = params.materiPokok.trim();
+  const mapel = (params.mataPelajaran || 'Akuntansi & Keuangan Lembaga').trim();
+  const fase = (params.jenjangFase || 'Fase F (Kelas 11-12 SMA/SMK)').trim();
+  const topik = (params.materiPokok || 'Siklus Akuntansi dan Pelaporan Keuangan').trim();
+  const userSummary = (params.ringkasanMateri || '').trim();
 
-  const capaianPembelajaran = `Pada akhir ${fase}, peserta didik mampu memahami, menerapkan, dan menganalisis konsep serta prosedur siklus ${mapel} yang berkaitan dengan ${topik} secara sistematis, menyusun pencatatan dokumen transaksi hingga pelaporan sesuai Standar Akuntansi Keuangan (SAK), serta mengevaluasi ketepatan data keuangan untuk pengambilan keputusan.`;
+  // Cari kecocokan dengan basis pengetahuan Kurikulum Akuntansi spesifik
+  const combinedSearch = `${topik} ${mapel} ${userSummary}`;
+  const matchedTemplate = ACCOUNTING_TOPIC_TEMPLATES.find((tpl) =>
+    tpl.keywords.test(combinedSearch)
+  );
+
+  if (matchedTemplate) {
+    const capaianPembelajaran = `Pada akhir ${fase} mata pelajaran ${mapel}, peserta didik mampu ${matchedTemplate.cpFocus} pada lingkup materi "${topik}" secara teliti, sistematis, dan sesuai dengan Standar Akuntansi Keuangan (SAK).`;
+    const tujuanPembelajaran = matchedTemplate.tpItems.join('\n');
+    const alurTujuanPembelajaran = matchedTemplate.atpItems.join('\n');
+    const ringkasanMateri =
+      userSummary.length > 30 ? userSummary : matchedTemplate.summaryText;
+
+    return {
+      capaianPembelajaran,
+      tujuanPembelajaran,
+      alurTujuanPembelajaran,
+      ringkasanMateri,
+    };
+  }
+
+  // Ekstraksi sub-konsep cerdas dari judul Materi Pokok atau Uraian Materi yang diketik guru
+  const subPoints = userSummary
+    .split(/[\n.;]+/)
+    .map((s) => s.replace(/^[0-9\-*•()\s]+/, '').trim())
+    .filter((s) => s.length >= 12);
+
+  const sub1 = subPoints[0] || `konsep dasar, definisi, dan klasifikasi komponen pada ${topik}`;
+  const sub2 = subPoints[1] || `prosedur perhitungan dan penerapan pencatatan sistematis pada ${topik}`;
+  const sub3 = subPoints[2] || `analisis kasus kontekstual dan penyesuaian data pada ${topik}`;
+  const sub4 = subPoints[3] || `evaluasi ketepatan pelaporan dan pengambilan keputusan terkait ${topik}`;
+
+  const capaianPembelajaran = `Pada akhir ${fase} mata pelajaran ${mapel}, peserta didik mampu memahami, menerapkan, menganalisis, dan mengevaluasi konsep serta prosedur "${topik}" secara sistematis, mengolah data/informasi berdasarkan kaidah keilmuan ${mapel}, serta menyajikan hasil analisis secara akurat dan bertanggung jawab.`;
 
   const tujuanPembelajaran = [
-    `1. Menjelaskan konsep dasar, karakteristik, akun-akun terkait, dan aturan saldo normal pada materi ${topik}.`,
-    `2. Menerapkan prosedur pencatatan transaksi, perhitungan matematis/keuangan, dan penjurnalan pada ${topik}.`,
-    `3. Menganalisis kasus transaksi kompleks, jurnal penyesuaian, serta ikhtisar pelaporan keuangan yang melibatkan ${topik}.`,
-    `4. Mengevaluasi dampak kesalahan pencatatan dan memvalidasi kewajaran penyajian informasi akuntansi terkait ${topik}.`,
+    `1. Menjelaskan ${sub1} sesuai kaidah pada mata pelajaran ${mapel}.`,
+    `2. Menerapkan ${sub2} berdasarkan data atau kasus operasional yang disajikan.`,
+    `3. Menganalisis ${sub3} secara kritis dan sistematis.`,
+    `4. Mengevaluasi ${sub4} untuk memvalidasi kebenaran kesimpulan atau pelaporan.`,
   ].join('\n');
 
   const alurTujuanPembelajaran = [
-    `ATP 1 (L1 - C1/C2): Mengidentifikasi definisi, dokumen sumber, dan klasifikasi akun dalam ${topik}.`,
-    `ATP 2 (L2 - C3): Menghitung nilai transaksi dan menerapkan pencatatan jurnal/buku besar pada ${topik}.`,
-    `ATP 3 (L3 - C4): Menganalisis data penyesuaian akhir periode dan rekonsiliasi data pada ${topik}.`,
-    `ATP 4 (L3 - C5): Mengevaluasi ketepatan laporan keuangan dan dampak salah saji pada ${topik}.`,
+    `ATP 1 (L1 - C1/C2 Pemahaman): Mengidentifikasi prinsip dasar, dokumen/komponen utama, dan konsep esensial pada ${topik}.`,
+    `ATP 2 (L2 - C3 Penerapan): Menerapkan rumus, prosedur teknis, dan langkah penyelesaian kasus standar pada ${topik}.`,
+    `ATP 3 (L3 - C4 Analisis HOTS): Menganalisis hubungan antar-data, rekonsiliasi/penyesuaian, dan pemecahan masalah kompleks pada ${topik}.`,
+    `ATP 4 (L3 - C5 Evaluasi HOTS): Mengevaluasi dampak kesalahan prosedur dan memvalidasi ketepatan hasil akhir pada ${topik}.`,
   ].join('\n');
 
   const ringkasanMateri =
-    params.ringkasanMateri && params.ringkasanMateri.trim().length > 20
-      ? params.ringkasanMateri
-      : `Materi ${topik} pada mata pelajaran ${mapel} (${fase}) mencakup empat pilar utama:\n1) Pemahaman konsep dasar, pengakuan awal, dokumen sumber transaksi, serta mekanisme Debit dan Kredit sesuai saldo normal akun.\n2) Perhitungan kuantitatif nilai transaksi, potongan, beban, atau harga pokok sesuai metode akuntansi yang berlaku.\n3) Pencatatan sistematis ke dalam jurnal, pemindahbukuan ke buku besar/kartu pembantu, serta penyusunan ayat jurnal penyesuaian pada akhir periode.\n4) Analisis dan evaluasi dampak transaksi terhadap Laporan Laba Rugi, Laporan Perubahan Ekuitas, dan Laporan Posisi Keuangan (Neraca).`;
+    userSummary.length > 25
+      ? userSummary
+      : `Ringkasan Materi Esensial — ${topik} (${mapel} · ${fase}):\n1) Konsep Dasar & Pengakuan Awal: Mencakup ruang lingkup, prinsip dasar, bukti pendukung, serta klasifikasi elemen utama dalam ${topik}.\n2) Prosedur Penerapan & Perhitungan: Langkah sistematis pengolahan data kuantitatif maupun pencatatan prosedural pada ${topik}.\n3) Analisis & Penyesuaian Data: Telaah kritis terhadap perubahan nilai, rekonsiliasi data, dan penyesuaian akhir periode terkait ${topik}.\n4) Evaluasi & Pelaporan: Pemeriksaan kewajaran penyajian informasi dan analisis dampak kesalahan pencatatan pada ${topik}.`;
 
   return {
     capaianPembelajaran,
@@ -47,9 +317,16 @@ export function buildFallbackCurriculum(params: {
 export function buildFallbackQuestions(config: any, jumlahSoal: number, jumlahOpsi: 4 | 5) {
   const mapel = config.mataPelajaran || 'Akuntansi & Keuangan Lembaga';
   const topik = config.materiPokok || 'Siklus Akuntansi dan Pelaporan Keuangan';
-  const rawSummary = String(config.ringkasanMateri || topik);
+  const derived = buildFallbackCurriculum({
+    mataPelajaran: mapel,
+    jenjangFase: config.jenjangFase,
+    kelasSemester: config.kelasSemester,
+    materiPokok: topik,
+    ringkasanMateri: config.ringkasanMateri,
+  });
 
-  // Ekstrak kalimat atau poin konsep dari ringkasan materi pengguna
+  const rawSummary = String(config.ringkasanMateri || derived.ringkasanMateri || topik);
+
   const concepts = rawSummary
     .split(/[\n.;]+/)
     .map((s) => s.replace(/^[0-9\-*•()\s]+/, '').trim())
@@ -73,7 +350,7 @@ export function buildFallbackQuestions(config: any, jumlahSoal: number, jumlahOp
     {
       aspect: 'Prinsip Pengakuan & Klasifikasi Akun',
       stimulusType: 'Ilustrasi Bukti Transaksi & Kebijakan Akuntansi',
-      makeQuestion: (no: number, concept: string, lvl: 'L1' | 'L2' | 'L3') => {
+      makeQuestion: (no: number, concept: string) => {
         const nominal = (12 + (no % 15) * 4) * 1_000_000;
         const nominalFmt = `Rp${nominal.toLocaleString('id-ID')},00`;
         return {
@@ -97,7 +374,7 @@ export function buildFallbackQuestions(config: any, jumlahSoal: number, jumlahOp
               rasional: 'Kekeliruan memahami mekanisme saldo normal akun yang menyebabkan neraca saldo tidak valid.',
             },
             {
-              teks: `Mengabaikan nilai dokumen pendukung dan hanya mencatat setengah dari nilai transaksi (${ `Rp${(nominal / 2).toLocaleString('id-ID')},00` })`,
+              teks: `Mengabaikan nilai dokumen pendukung dan hanya mencatat setengah dari nilai transaksi (${`Rp${(nominal / 2).toLocaleString('id-ID')},00`})`,
               rasional: 'Melanggar prinsip pengukuran biaya historis (historical cost) dan objektivitas bukti transaksi.',
             },
           ],
@@ -108,7 +385,7 @@ export function buildFallbackQuestions(config: any, jumlahSoal: number, jumlahOp
     {
       aspect: 'Perhitungan Kuantitatif & Penjurnalan',
       stimulusType: 'Data Keuangan & Perhitungan Akuntansi',
-      makeQuestion: (no: number, concept: string, _lvl: 'L1' | 'L2' | 'L3') => {
+      makeQuestion: (no: number, concept: string) => {
         const saldoAwal = (20 + (no % 10) * 5) * 1_000_000;
         const mutasiTambah = (35 + (no % 8) * 5) * 1_000_000;
         const pengurang = (8 + (no % 6) * 2) * 1_000_000;
@@ -148,7 +425,7 @@ export function buildFallbackQuestions(config: any, jumlahSoal: number, jumlahOp
     {
       aspect: 'Analisis Ayat Jurnal Penyesuaian & Kertas Kerja',
       stimulusType: 'Data Neraca Saldo vs Data Penyesuaian Akhir Periode',
-      makeQuestion: (no: number, concept: string, _lvl: 'L1' | 'L2' | 'L3') => {
+      makeQuestion: (no: number, concept: string) => {
         const tercatat = (18 + (no % 9) * 3) * 1_000_000;
         const sisaAktual = (6 + (no % 5) * 2) * 1_000_000;
         const selisihPenyesuaian = tercatat - sisaAktual;
@@ -186,7 +463,7 @@ export function buildFallbackQuestions(config: any, jumlahSoal: number, jumlahOp
     {
       aspect: 'Evaluasi Dampak Salah Saji terhadap Laporan Keuangan',
       stimulusType: 'Studi Kasus Audit Internal & Evaluasi Laporan Keuangan',
-      makeQuestion: (no: number, concept: string, _lvl: 'L1' | 'L2' | 'L3') => {
+      makeQuestion: (no: number, concept: string) => {
         const nilaiSalahSaji = (15 + (no % 7) * 5) * 1_000_000;
         const fmt = (n: number) => `Rp${n.toLocaleString('id-ID')},00`;
 
@@ -220,14 +497,6 @@ export function buildFallbackQuestions(config: any, jumlahSoal: number, jumlahOp
       },
     },
   ];
-
-  const derived = buildFallbackCurriculum({
-    mataPelajaran: mapel,
-    jenjangFase: config.jenjangFase,
-    kelasSemester: config.kelasSemester,
-    materiPokok: topik,
-    ringkasanMateri: rawSummary,
-  });
 
   const items = [];
 
@@ -263,9 +532,8 @@ export function buildFallbackQuestions(config: any, jumlahSoal: number, jumlahOp
         ? 2
         : 3;
     const tpl = scenarioTemplates[tplIdx];
-    const generated = tpl.makeQuestion(nomor, concept, levelKognitif);
+    const generated = tpl.makeQuestion(nomor, concept);
 
-    // Rotasi kunci jawaban secara merata di antara A, B, C, D, (E)
     const keyIdx = (i * 2 + 1) % labels.length;
     const kunciJawaban = labels[keyIdx];
 

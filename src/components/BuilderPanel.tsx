@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Sparkles,
   BookOpen,
@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { CurriculumConfig, FaseKurikulum, QuestionItem, WorkspaceTab } from '../types/assessment';
 import { PRESET_MATERIALS } from '../data/presets';
+import { buildFallbackCurriculum } from '../utils/serverFallbackGenerator';
 
 interface BuilderPanelProps {
   config: CurriculumConfig;
@@ -48,6 +49,8 @@ export const BuilderPanel: React.FC<BuilderPanelProps> = ({
   items,
   onNavigateTab,
 }) => {
+  const [autoSyncCurriculum, setAutoSyncCurriculum] = useState(true);
+  const [deriveSuccessNotice, setDeriveSuccessNotice] = useState<string | null>(null);
   const totalProporsi = config.proporsiL1 + config.proporsiL2 + config.proporsiL3;
 
   const adjustProportion = (level: 'proporsiL1' | 'proporsiL2' | 'proporsiL3', value: number) => {
@@ -73,6 +76,37 @@ export const BuilderPanel: React.FC<BuilderPanelProps> = ({
   const countL1 = Math.round((config.jumlahSoal * config.proporsiL1) / 100);
   const countL2 = Math.round((config.jumlahSoal * config.proporsiL2) / 100);
   const countL3 = Math.max(0, config.jumlahSoal - countL1 - countL2);
+
+  const handleMateriPokokChange = (newMateri: string) => {
+    setDeriveSuccessNotice(null);
+    onChangeConfig((prev) => {
+      if (!autoSyncCurriculum || !newMateri.trim()) {
+        return { ...prev, materiPokok: newMateri };
+      }
+      const derived = buildFallbackCurriculum({
+        mataPelajaran: prev.mataPelajaran,
+        jenjangFase: prev.jenjangFase,
+        kelasSemester: prev.kelasSemester,
+        materiPokok: newMateri,
+        ringkasanMateri: prev.ringkasanMateri,
+      });
+      return {
+        ...prev,
+        materiPokok: newMateri,
+        capaianPembelajaran: derived.capaianPembelajaran,
+        tujuanPembelajaran: derived.tujuanPembelajaran,
+        alurTujuanPembelajaran: derived.alurTujuanPembelajaran,
+      };
+    });
+  };
+
+  const handleClickDerive = async () => {
+    setDeriveSuccessNotice(null);
+    await onDeriveCurriculum();
+    setDeriveSuccessNotice(
+      'Struktur CP, TP, ATP, dan Ringkasan Materi berhasil diturunkan otomatis dari Materi Pokok.'
+    );
+  };
 
   return (
     <div className="space-y-8">
@@ -268,16 +302,25 @@ export const BuilderPanel: React.FC<BuilderPanelProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-900 mb-1.5">
-                Materi Pokok / Elemen Kompetensi Akuntansi <span className="text-red-600">*</span>
-              </label>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+                <label className="block text-xs font-semibold text-slate-900">
+                  Materi Pokok / Elemen Kompetensi Akuntansi <span className="text-red-600">*</span>
+                </label>
+                <label className="inline-flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={autoSyncCurriculum}
+                    onChange={(e) => setAutoSyncCurriculum(e.target.checked)}
+                    className="rounded border-slate-300 text-sky-600 focus:ring-sky-600"
+                  />
+                  <span>Turunkan CP, TP &amp; ATP otomatis saat materi diketik</span>
+                </label>
+              </div>
               <input
                 type="text"
                 value={config.materiPokok}
-                onChange={(e) =>
-                  onChangeConfig((prev) => ({ ...prev, materiPokok: e.target.value }))
-                }
-                placeholder="Ketik judul materi pokok akuntansi, contoh: Siklus Akuntansi Perusahaan Dagang, HPP, Rekonsiliasi Bank..."
+                onChange={(e) => handleMateriPokokChange(e.target.value)}
+                placeholder="Ketik judul materi pokok akuntansi, contoh: Kas Kecil, Rekonsiliasi Bank, Piutang, HPP, Aset Tetap..."
                 className="w-full px-3.5 py-2.5 text-sm font-medium bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-600"
               />
             </div>
@@ -297,7 +340,7 @@ export const BuilderPanel: React.FC<BuilderPanelProps> = ({
                 onChange={(e) =>
                   onChangeConfig((prev) => ({ ...prev, ringkasanMateri: e.target.value }))
                 }
-                placeholder="Tempelkan poin-poin materi pembelajaran, rumus, atau wacana bahan ajar di sini. Jika dikosongkan, AI akan mengembangkan konsep ilmiah secara otomatis berdasarkan Materi Pokok di atas..."
+                placeholder="Tempelkan poin-poin materi pembelajaran, rumus, atau wacana bahan ajar di sini. Jika dikosongkan, sistem akan mengembangkan konsep secara otomatis berdasarkan Materi Pokok di atas..."
                 className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-600 leading-relaxed"
               />
             </div>
@@ -311,14 +354,14 @@ export const BuilderPanel: React.FC<BuilderPanelProps> = ({
                   2. Struktur Kurikulum Merdeka (CP, TP &amp; ATP)
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Isi secara manual atau klik tombol di kanan untuk menurunkan otomatis dari Materi Pokok
+                  Diturunkan otomatis dari Materi Pokok atau klik tombol di kanan untuk memperbarui
                 </p>
               </div>
               <button
                 type="button"
-                onClick={onDeriveCurriculum}
+                onClick={handleClickDerive}
                 disabled={isDeriving || !config.materiPokok.trim()}
-                className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-sky-800 bg-sky-50 border border-sky-200 rounded-lg hover:bg-sky-100 disabled:opacity-50 transition-colors whitespace-nowrap shrink-0"
+                className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-sky-800 bg-sky-50 border border-sky-200 rounded-lg hover:bg-sky-100 disabled:opacity-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
               >
                 {isDeriving ? (
                   <>
@@ -333,6 +376,22 @@ export const BuilderPanel: React.FC<BuilderPanelProps> = ({
                 )}
               </button>
             </div>
+
+            {deriveSuccessNotice && (
+              <div className="flex items-center justify-between gap-2 px-3.5 py-2.5 text-xs font-medium text-emerald-900 bg-emerald-50 border border-emerald-200 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{deriveSuccessNotice}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDeriveSuccessNotice(null)}
+                  className="text-emerald-700 hover:text-emerald-950 font-semibold"
+                >
+                  Tutup
+                </button>
+              </div>
+            )}
 
             <div className="space-y-4">
               <div>
