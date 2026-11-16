@@ -1,14 +1,16 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Sparkles,
   BookOpen,
-  Layers,
   Sliders,
   CheckCircle2,
   ArrowRight,
   Wand2,
   RefreshCw,
   FileText,
+  Upload,
+  Trash2,
+  X,
 } from 'lucide-react';
 import { CurriculumConfig, FaseKurikulum, QuestionItem, WorkspaceTab } from '../types/assessment';
 import { PRESET_MATERIALS } from '../data/presets';
@@ -20,6 +22,15 @@ interface BuilderPanelProps {
   onSelectPreset: (presetId: string) => void;
   onDeriveCurriculum: () => Promise<void>;
   onGenerateQuestions: () => Promise<void>;
+  onUploadMaterial: (file: File, mode?: 'replace' | 'append') => Promise<void>;
+  onClearUploadedFile: () => void;
+  isUploadingMaterial: boolean;
+  uploadedFileInfo: {
+    name: string;
+    sizeLabel: string;
+    charCount: number;
+    sourceMethod: string;
+  } | null;
   isDeriving: boolean;
   isGenerating: boolean;
   generationStep: string;
@@ -43,6 +54,10 @@ export const BuilderPanel: React.FC<BuilderPanelProps> = ({
   onSelectPreset,
   onDeriveCurriculum,
   onGenerateQuestions,
+  onUploadMaterial,
+  onClearUploadedFile,
+  isUploadingMaterial,
+  uploadedFileInfo,
   isDeriving,
   isGenerating,
   generationStep,
@@ -51,6 +66,10 @@ export const BuilderPanel: React.FC<BuilderPanelProps> = ({
 }) => {
   const [autoSyncCurriculum, setAutoSyncCurriculum] = useState(true);
   const [deriveSuccessNotice, setDeriveSuccessNotice] = useState<string | null>(null);
+  const [uploadMode, setUploadMode] = useState<'replace' | 'append'>('replace');
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const materiInputRef = useRef<HTMLInputElement | null>(null);
   const totalProporsi = config.proporsiL1 + config.proporsiL2 + config.proporsiL3;
 
   const adjustProportion = (level: 'proporsiL1' | 'proporsiL2' | 'proporsiL3', value: number) => {
@@ -121,24 +140,27 @@ export const BuilderPanel: React.FC<BuilderPanelProps> = ({
               Susun Soal Pilihan Ganda, Kisi-Kisi &amp; Analisis Butir Hanya dari Materi Pokok
             </h1>
             <p className="mt-2 text-sm text-slate-600 leading-relaxed">
-              Pilih elemen <strong>Kurikulum Akuntansi</strong> atau ketik langsung <strong>Materi Pokok</strong> Anda di bawah ini. AI akan otomatis menurunkan <strong>CP, TP, dan ATP</strong>, menyusun <strong>Kisi-Kisi ABCD</strong>, merakit <strong>Kartu Soal HOTS</strong> beserta rasional pengecoh, hingga menghitung <strong>Analisis Statistik Empiris ($P$, $D$, $r_{'{pbi}'}$, KR-20)</strong>.
+              Pilih elemen <strong>Kurikulum Akuntansi</strong> atau ketik langsung <strong>Materi Pokok</strong> Anda di bawah ini. AI akan otomatis menurunkan <strong>CP, TP, dan ATP</strong>, menyusun <strong>Kisi-Kisi ABCD</strong>, merakit <strong>Kartu Soal HOTS</strong> beserta rasional pengecoh, hingga menghitung <strong>Analisis Statistik Empiris (<i>P</i>, <i>D</i>, <i>r</i><sub>pbi</sub>, KR-20)</strong>.
             </p>
           </div>
 
-          <div className="w-full lg:w-96 bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2.5 shrink-0">
-            <div className="flex items-center justify-between">
+          <div className="w-full lg:w-[410px] bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3 shrink-0">
+            <div className="flex items-center justify-between gap-2">
               <label
                 htmlFor="kurikulum-akuntansi-select"
                 className="text-xs font-bold text-slate-800"
               >
-                Muat Materi Sesuai Kurikulum Akuntansi:
+                Sumber Materi Pembelajaran:
               </label>
               <button
                 type="button"
-                onClick={() => onSelectPreset('__BLANK__')}
+                onClick={() => {
+                  onSelectPreset('__BLANK__');
+                  setTimeout(() => materiInputRef.current?.focus(), 50);
+                }}
                 className="text-[11px] font-semibold text-sky-700 hover:text-sky-900 underline cursor-pointer"
               >
-                Kosongkan Form (Input Manual)
+                Kosongkan &amp; Input Manual
               </button>
             </div>
             <select
@@ -148,14 +170,17 @@ export const BuilderPanel: React.FC<BuilderPanelProps> = ({
                 '__CUSTOM__'
               }
               onChange={(e) => {
-                if (e.target.value !== '__CUSTOM__') {
+                if (e.target.value === '__CUSTOM__') {
+                  onSelectPreset('__BLANK__');
+                  setTimeout(() => materiInputRef.current?.focus(), 50);
+                } else {
                   onSelectPreset(e.target.value);
                 }
               }}
               className="w-full px-3 py-2 text-xs font-semibold bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-600"
             >
               <option value="__CUSTOM__">
-                -- Materi Kustom / Input Manual Guru --
+                -- Materi Kustom / Input Manual atau Upload File --
               </option>
               {PRESET_MATERIALS.map((preset) => (
                 <option key={preset.id} value={preset.id}>
@@ -163,8 +188,30 @@ export const BuilderPanel: React.FC<BuilderPanelProps> = ({
                 </option>
               ))}
             </select>
-            <p className="text-[11px] text-slate-500">
-              Memuat CP, TP, ATP, Uraian Materi, Kisi-Kisi, dan Paket Soal sesuai elemen Kurikulum Merdeka Akuntansi.
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  onSelectPreset('__BLANK__');
+                  setTimeout(() => materiInputRef.current?.focus(), 50);
+                }}
+                className="flex-1 inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <FileText className="w-3.5 h-3.5 text-slate-500" />
+                <span>Input Materi Kustom</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploadingMaterial}
+                className="flex-1 inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold text-sky-800 bg-sky-50 border border-sky-200 rounded-lg hover:bg-sky-100 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                <Upload className="w-3.5 h-3.5 text-sky-700" />
+                <span>{isUploadingMaterial ? 'Membaca...' : 'Upload File Materi'}</span>
+              </button>
+            </div>
+            <p className="text-[11px] text-slate-500 leading-snug">
+              Pilih modul Kurikulum Akuntansi, ketik materi kustom secara manual, atau unggah file modul (PDF, Word .docx, TXT, Gambar).
             </p>
           </div>
         </div>
@@ -192,7 +239,7 @@ export const BuilderPanel: React.FC<BuilderPanelProps> = ({
           <div>
             <span className="font-semibold text-slate-900">04. Anates Statistik Empiris</span>
             <p className="mt-0.5 text-slate-500">
-              Uji kesukaran ($P$), daya beda ($D$), validitas ($r_{'{pbi}'}$), &amp; reliabilitas KR-20.
+              Uji kesukaran (<i>P</i>), daya beda (<i>D</i>), validitas (<i>r</i><sub>pbi</sub>), &amp; reliabilitas KR-20.
             </p>
           </div>
         </div>
@@ -304,7 +351,7 @@ export const BuilderPanel: React.FC<BuilderPanelProps> = ({
             <div>
               <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
                 <label className="block text-xs font-semibold text-slate-900">
-                  Materi Pokok / Elemen Kompetensi Akuntansi <span className="text-red-600">*</span>
+                  Materi Pokok / Topik Kustom <span className="text-red-600">*</span>
                 </label>
                 <label className="inline-flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none">
                   <input
@@ -317,30 +364,157 @@ export const BuilderPanel: React.FC<BuilderPanelProps> = ({
                 </label>
               </div>
               <input
+                ref={materiInputRef}
                 type="text"
                 value={config.materiPokok}
                 onChange={(e) => handleMateriPokokChange(e.target.value)}
-                placeholder="Ketik judul materi pokok akuntansi, contoh: Kas Kecil, Rekonsiliasi Bank, Piutang, HPP, Aset Tetap..."
+                placeholder="Ketik judul materi pokok (Akuntansi atau materi kustom apa saja), contoh: Kas Kecil, Rekonsiliasi Bank, Pajak..."
                 className="w-full px-3.5 py-2.5 text-sm font-medium bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-600"
               />
             </div>
 
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-semibold text-slate-700">
-                  Uraian Materi Pembelajaran / Teks Bahan Ajar (Opsional namun Direkomendasikan)
-                </label>
-                <span className="text-xs text-slate-500">
-                  Tempelkan ringkasan bab, modul, atau artikel referensi
+            {/* Zona Upload Materi (PDF, Word .docx, TXT, MD, CSV, atau Foto Halaman Modul) */}
+            <div className="space-y-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs font-semibold text-slate-800">
+                  Upload Dokumen / Bahan Ajar (Opsional — Otomatis Mengekstrak Materi, CP, TP &amp; ATP)
                 </span>
+                <div className="inline-flex items-center gap-1 p-0.5 bg-slate-100 rounded-md text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => setUploadMode('replace')}
+                    className={`px-2 py-0.5 rounded font-medium cursor-pointer transition-colors ${
+                      uploadMode === 'replace'
+                        ? 'bg-white text-slate-900 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Ganti Materi
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setUploadMode('append')}
+                    className={`px-2 py-0.5 rounded font-medium cursor-pointer transition-colors ${
+                      uploadMode === 'append'
+                        ? 'bg-white text-slate-900 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Tambahkan ke Materi
+                  </button>
+                </div>
+              </div>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.docx,.txt,.md,.csv,image/png,image/jpeg,image/webp"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    onUploadMaterial(file, uploadMode);
+                    e.target.value = '';
+                  }
+                }}
+              />
+
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setIsDraggingFile(true);
+                }}
+                onDragLeave={() => setIsDraggingFile(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setIsDraggingFile(false);
+                  const file = e.dataTransfer.files?.[0];
+                  if (file) {
+                    onUploadMaterial(file, uploadMode);
+                  }
+                }}
+                onClick={() => {
+                  if (!isUploadingMaterial) fileInputRef.current?.click();
+                }}
+                className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-colors ${
+                  isDraggingFile
+                    ? 'border-sky-500 bg-sky-50'
+                    : 'border-slate-300 bg-slate-50/70 hover:border-sky-400 hover:bg-sky-50/40'
+                }`}
+              >
+                {isUploadingMaterial ? (
+                  <div className="flex items-center justify-center gap-2.5 py-1 text-xs font-semibold text-sky-800">
+                    <RefreshCw className="w-4 h-4 animate-spin text-sky-600" />
+                    <span>Membaca &amp; mengekstrak isi materi serta CP, TP, ATP dari berkas...</span>
+                  </div>
+                ) : (
+                  <div className="flex flex-col sm:flex-row items-center justify-center gap-3 text-left">
+                    <div className="w-9 h-9 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0">
+                      <Upload className="w-4 h-4 text-sky-600" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-slate-800">
+                        Klik untuk pilih file atau seret &amp; lepas dokumen materi ke sini
+                      </p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Mendukung <strong>PDF (.pdf)</strong>, <strong>Word (.docx)</strong>, <strong>Teks (.txt, .md, .csv)</strong>, dan <strong>Foto Catatan/Buku (.png, .jpg)</strong> maks. 15 MB.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {uploadedFileInfo && (
+                <div className="flex items-center justify-between gap-3 px-3.5 py-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs">
+                  <div className="flex items-center gap-2 text-emerald-900 min-w-0">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span className="truncate font-semibold">{uploadedFileInfo.name}</span>
+                    <span className="text-emerald-700 font-mono tabular-nums shrink-0">
+                      ({uploadedFileInfo.sizeLabel} · {uploadedFileInfo.charCount.toLocaleString('id-ID')} karakter diekstrak)
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={onClearUploadedFile}
+                    className="text-emerald-700 hover:text-emerald-950 shrink-0 cursor-pointer"
+                    title="Tutup info file"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+                <label className="block text-xs font-semibold text-slate-700">
+                  Input Manual Uraian Materi / Hasil Ekstraksi Bahan Ajar
+                </label>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-slate-500 font-mono tabular-nums">
+                    {config.ringkasanMateri.length.toLocaleString('id-ID')} karakter
+                  </span>
+                  {config.ringkasanMateri.trim() && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onChangeConfig((prev) => ({ ...prev, ringkasanMateri: '' }))
+                      }
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 hover:text-red-600 cursor-pointer"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      <span>Bersihkan Teks</span>
+                    </button>
+                  )}
+                </div>
               </div>
               <textarea
-                rows={5}
+                rows={6}
                 value={config.ringkasanMateri}
                 onChange={(e) =>
                   onChangeConfig((prev) => ({ ...prev, ringkasanMateri: e.target.value }))
                 }
-                placeholder="Tempelkan poin-poin materi pembelajaran, rumus, atau wacana bahan ajar di sini. Jika dikosongkan, sistem akan mengembangkan konsep secara otomatis berdasarkan Materi Pokok di atas..."
+                placeholder="Ketik atau tempelkan materi pembelajaran kustom Anda secara manual di sini (konsep, rumus, studi kasus, aturan jurnal, atau catatan bahan ajar), atau unggah file di atas agar terisi otomatis..."
                 className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-600 leading-relaxed"
               />
             </div>
@@ -360,7 +534,7 @@ export const BuilderPanel: React.FC<BuilderPanelProps> = ({
               <button
                 type="button"
                 onClick={handleClickDerive}
-                disabled={isDeriving || !config.materiPokok.trim()}
+                disabled={isDeriving || (!config.materiPokok.trim() && !config.ringkasanMateri.trim())}
                 className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-sky-800 bg-sky-50 border border-sky-200 rounded-lg hover:bg-sky-100 disabled:opacity-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
               >
                 {isDeriving ? (
@@ -656,7 +830,7 @@ export const BuilderPanel: React.FC<BuilderPanelProps> = ({
               <button
                 type="button"
                 onClick={onGenerateQuestions}
-                disabled={isGenerating || !config.materiPokok.trim()}
+                disabled={isGenerating || (!config.materiPokok.trim() && !config.ringkasanMateri.trim())}
                 className="w-full flex items-center justify-center gap-2.5 px-5 py-3.5 text-sm font-semibold text-white bg-sky-600 rounded-xl hover:bg-sky-700 disabled:opacity-50 transition-colors cursor-pointer"
               >
                 {isGenerating ? (
@@ -734,7 +908,7 @@ export const BuilderPanel: React.FC<BuilderPanelProps> = ({
                     Laboratorium Analisis Butir Soal Statistik Empiris
                   </div>
                   <div className="text-xs text-slate-500">
-                    Indeks Kesukaran ($P$), Daya Pembeda ($D$), Validitas ($r_{'{pbi}'}$), &amp; Reliabilitas KR-20
+                    Indeks Kesukaran (<i>P</i>), Daya Pembeda (<i>D</i>), Validitas (<i>r</i><sub>pbi</sub>), &amp; Reliabilitas KR-20
                   </div>
                 </div>
                 <ArrowRight className="w-4 h-4 text-slate-400 shrink-0" />

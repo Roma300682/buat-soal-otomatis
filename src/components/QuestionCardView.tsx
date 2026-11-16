@@ -9,6 +9,7 @@ import {
   Printer,
   CheckCircle2,
   AlertCircle,
+  FileText,
 } from 'lucide-react';
 import {
   CurriculumConfig,
@@ -17,6 +18,7 @@ import {
   QuestionItem,
   WorkspaceTab,
 } from '../types/assessment';
+import { downloadAssessmentWord } from '../utils/exportDocuments';
 
 interface QuestionCardViewProps {
   config: CurriculumConfig;
@@ -461,11 +463,43 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = ({
 
           <button
             type="button"
+            onClick={() =>
+              downloadAssessmentWord({
+                config,
+                items,
+                summary: {
+                  jumlahSiswa: 0,
+                  jumlahButir: items.length,
+                  ukuranKelompokAtasBawah: 0,
+                  rataRataSkor: 0,
+                  rataRataBenar: 0,
+                  simpanganBakuSkor: 0,
+                  skorTertinggi: 0,
+                  skorTerendah: 0,
+                  reliabilitasKR20: 0,
+                  kategoriReliabilitas: 'Sedang',
+                  persentaseTuntasKKM: 0,
+                  jumlahButirDiterima: 0,
+                  jumlahButirRevisi: 0,
+                  jumlahButirDitolak: 0,
+                  butirStats: [],
+                },
+                docType: 'kunci-pembahasan',
+              })
+            }
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-sky-800 bg-sky-50 border border-sky-200 rounded-lg hover:bg-sky-100 transition-colors whitespace-nowrap cursor-pointer"
+          >
+            <FileText className="w-3.5 h-3.5 text-sky-700" />
+            <span>Word (.docx)</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => onNavigateTab('ekspor')}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors whitespace-nowrap"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors whitespace-nowrap cursor-pointer"
           >
             <Printer className="w-3.5 h-3.5" />
-            <span>Cetak Kartu Soal</span>
+            <span>Cetak / Ekspor</span>
           </button>
         </div>
       </div>

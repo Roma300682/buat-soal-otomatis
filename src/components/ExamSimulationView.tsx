@@ -40,15 +40,29 @@ export const ExamSimulationView: React.FC<ExamSimulationViewProps> = ({
   const [hasPushedToAnalysis, setHasPushedToAnalysis] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
+  const totalAllowedSeconds = (config.waktuUjianMenit || 30) * 60;
+
+  useEffect(() => {
+    if (currentIdx >= items.length && items.length > 0) {
+      setCurrentIdx(0);
+    }
+  }, [items.length, currentIdx]);
+
   useEffect(() => {
     if (isSubmitted) return;
     const timer = setInterval(() => {
-      setElapsedSeconds((prev) => prev + 1);
+      setElapsedSeconds((prev) => {
+        const next = prev + 1;
+        if (next >= totalAllowedSeconds) {
+          setIsSubmitted(true);
+          return totalAllowedSeconds;
+        }
+        return next;
+      });
     }, 1000);
     return () => clearInterval(timer);
-  }, [isSubmitted]);
+  }, [isSubmitted, totalAllowedSeconds]);
 
-  const totalAllowedSeconds = (config.waktuUjianMenit || 30) * 60;
   const remainingSeconds = Math.max(0, totalAllowedSeconds - elapsedSeconds);
   const mins = Math.floor(remainingSeconds / 60);
   const secs = remainingSeconds % 60;

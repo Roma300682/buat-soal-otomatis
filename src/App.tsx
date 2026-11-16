@@ -85,6 +85,13 @@ export default function App() {
   );
   const [isDeriving, setIsDeriving] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isUploadingMaterial, setIsUploadingMaterial] = useState(false);
+  const [uploadedFileInfo, setUploadedFileInfo] = useState<{
+    name: string;
+    sizeLabel: string;
+    charCount: number;
+    sourceMethod: string;
+  } | null>(null);
   const [generationStep, setGenerationStep] = useState('');
   const [revisingItemId, setRevisingItemId] = useState<string | null>(null);
   const [cohortSeedOffset, setCohortSeedOffset] = useState(1);
@@ -114,6 +121,7 @@ export default function App() {
 
   const handleSelectPreset = (presetId: string) => {
     setErrorBanner(null);
+    setUploadedFileInfo(null);
     if (presetId === '__BLANK__') {
       setConfig((prev) => ({
         ...prev,
@@ -135,16 +143,141 @@ export default function App() {
     }
   };
 
+  // 0. Handler: Upload File Materi (PDF, DOCX, TXT, MD, CSV, atau Gambar Halaman Bahan Ajar)
+  const handleUploadMaterial = async (file: File, mode: 'replace' | 'append' = 'replace') => {
+    setErrorBanner(null);
+    const maxBytes = 15 * 1024 * 1024;
+    if (file.size > maxBytes) {
+      setErrorBanner('Ukuran file melebihi batas maksimum 15 MB. Silakan pilih file yang lebih ringkas.');
+      return;
+    }
+
+    setIsUploadingMaterial(true);
+    const formatSize = (bytes: number) =>
+      bytes >= 1024 * 1024
+        ? `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+        : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+
+    const lower = file.name.toLowerCase();
+    const isPlainText =
+      lower.endsWith('.txt') ||
+      lower.endsWith('.md') ||
+      lower.endsWith('.csv') ||
+      file.type.startsWith('text/');
+
+    const cleanTopicFromFile = file.name
+      .replace(/\.[^/.]+$/, '')
+      .replace(/[_\-]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    try {
+      let textContent: string | undefined;
+      let base64Data: string | undefined;
+
+      if (isPlainText) {
+        textContent = await file.text();
+      } else {
+        base64Data = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const resStr = String(reader.result || '');
+            const commaIdx = resStr.indexOf(',');
+            resolve(commaIdx >= 0 ? resStr.slice(commaIdx + 1) : resStr);
+          };
+          reader.onerror = () => reject(new Error('Gagal membaca file dari perangkat.'));
+          reader.readAsDataURL(file);
+        });
+      }
+
+      const response = await fetch('/api/assessment/parse-material', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileName: file.name,
+          mimeType: file.type,
+          base64Data,
+          textContent,
+          mataPelajaran: config.mataPelajaran,
+          jenjangFase: config.jenjangFase,
+          kelasSemester: config.kelasSemester,
+        }),
+      });
+
+      const localFallback = buildFallbackCurriculum({
+        mataPelajaran: config.mataPelajaran,
+        jenjangFase: config.jenjangFase,
+        kelasSemester: config.kelasSemester,
+        materiPokok: cleanTopicFromFile || config.materiPokok || 'Materi Pembelajaran',
+        ringkasanMateri: textContent,
+      });
+
+      const data = response.ok
+        ? await response.json()
+        : {
+            materiPokok: cleanTopicFromFile || config.materiPokok,
+            ringkasanMateri: textContent || localFallback.ringkasanMateri,
+            capaianPembelajaran: localFallback.capaianPembelajaran,
+            tujuanPembelajaran: localFallback.tujuanPembelajaran,
+            alurTujuanPembelajaran: localFallback.alurTujuanPembelajaran,
+            detectedSubject: config.mataPelajaran,
+            extractedChars: (textContent || localFallback.ringkasanMateri).length,
+            sourceMethod: 'local',
+          };
+
+      const extractedSummary = String(data.ringkasanMateri || '').trim();
+      setConfig((prev) => ({
+        ...prev,
+        mataPelajaran:
+          mode === 'replace' && data.detectedSubject
+            ? data.detectedSubject
+            : prev.mataPelajaran,
+        materiPokok:
+          mode === 'replace'
+            ? data.materiPokok || cleanTopicFromFile || prev.materiPokok
+            : prev.materiPokok || data.materiPokok || cleanTopicFromFile,
+        ringkasanMateri:
+          mode === 'append' && prev.ringkasanMateri.trim()
+            ? `${prev.ringkasanMateri.trim()}\n\n--- Tambahan dari ${file.name} ---\n${extractedSummary}`
+            : extractedSummary,
+        capaianPembelajaran: data.capaianPembelajaran || prev.capaianPembelajaran,
+        tujuanPembelajaran: data.tujuanPembelajaran || prev.tujuanPembelajaran,
+        alurTujuanPembelajaran: data.alurTujuanPembelajaran || prev.alurTujuanPembelajaran,
+      }));
+
+      setUploadedFileInfo({
+        name: file.name,
+        sizeLabel: formatSize(file.size),
+        charCount: Number(data.extractedChars) || extractedSummary.length,
+        sourceMethod: String(data.sourceMethod || 'local'),
+      });
+    } catch (err: any) {
+      setErrorBanner(err?.message || 'Gagal memproses file materi yang diunggah.');
+    } finally {
+      setIsUploadingMaterial(false);
+    }
+  };
+
   // 1. Handler: Turunkan CP, TP, ATP otomatis hanya dari Materi Pokok (Zero-Error Guarantee)
   const handleDeriveCurriculum = async () => {
     setErrorBanner(null);
     setIsDeriving(true);
 
+    const firstSummaryLine = config.ringkasanMateri
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .find((l) => l.length >= 4);
+    const effectiveMateriPokok =
+      config.materiPokok.trim() ||
+      (firstSummaryLine ? firstSummaryLine.slice(0, 80) : '') ||
+      config.mataPelajaran ||
+      'Siklus Akuntansi';
+
     const localSynthesis = buildFallbackCurriculum({
       mataPelajaran: config.mataPelajaran,
       jenjangFase: config.jenjangFase,
       kelasSemester: config.kelasSemester,
-      materiPokok: config.materiPokok || config.mataPelajaran || 'Siklus Akuntansi',
+      materiPokok: effectiveMateriPokok,
       ringkasanMateri: config.ringkasanMateri,
     });
 
@@ -156,13 +289,14 @@ export default function App() {
           mataPelajaran: config.mataPelajaran,
           jenjangFase: config.jenjangFase,
           kelasSemester: config.kelasSemester,
-          materiPokok: config.materiPokok,
+          materiPokok: effectiveMateriPokok,
           ringkasanMateri: config.ringkasanMateri,
         }),
       });
       const data = response.ok ? await response.json() : localSynthesis;
       setConfig((prev) => ({
         ...prev,
+        materiPokok: prev.materiPokok.trim() || effectiveMateriPokok,
         capaianPembelajaran: data.capaianPembelajaran || localSynthesis.capaianPembelajaran,
         tujuanPembelajaran: data.tujuanPembelajaran || localSynthesis.tujuanPembelajaran,
         alurTujuanPembelajaran: data.alurTujuanPembelajaran || localSynthesis.alurTujuanPembelajaran,
@@ -172,6 +306,7 @@ export default function App() {
       // Apabila terjadi kendala jaringan apa pun, langsung gunakan sintesis Kurikulum Merdeka lokal tanpa error
       setConfig((prev) => ({
         ...prev,
+        materiPokok: prev.materiPokok.trim() || effectiveMateriPokok,
         capaianPembelajaran: localSynthesis.capaianPembelajaran,
         tujuanPembelajaran: localSynthesis.tujuanPembelajaran,
         alurTujuanPembelajaran: localSynthesis.alurTujuanPembelajaran,
@@ -190,6 +325,18 @@ export default function App() {
 
     const jumlahSoal = Math.min(Math.max(Number(config.jumlahSoal) || 5, 1), 50);
     const jumlahOpsi: 4 | 5 = Number(config.jumlahOpsi) === 4 ? 4 : 5;
+    const firstSummaryLine = config.ringkasanMateri
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .find((l) => l.length >= 4);
+    const effectiveConfig: CurriculumConfig = {
+      ...config,
+      materiPokok:
+        config.materiPokok.trim() ||
+        (firstSummaryLine ? firstSummaryLine.slice(0, 80) : '') ||
+        config.mataPelajaran ||
+        'Materi Pembelajaran Kustom',
+    };
 
     try {
       const stepTimer = setTimeout(() => {
@@ -201,17 +348,17 @@ export default function App() {
         const response = await fetch('/api/assessment/generate-items', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ config }),
+          body: JSON.stringify({ config: effectiveConfig }),
         });
         clearTimeout(stepTimer);
         if (response.ok) {
           data = await response.json();
         } else {
-          data = buildFallbackQuestions(config, jumlahSoal, jumlahOpsi);
+          data = buildFallbackQuestions(effectiveConfig, jumlahSoal, jumlahOpsi);
         }
       } catch {
         clearTimeout(stepTimer);
-        data = buildFallbackQuestions(config, jumlahSoal, jumlahOpsi);
+        data = buildFallbackQuestions(effectiveConfig, jumlahSoal, jumlahOpsi);
       }
 
       const localDerived = buildFallbackCurriculum({
@@ -476,6 +623,10 @@ export default function App() {
             onSelectPreset={handleSelectPreset}
             onDeriveCurriculum={handleDeriveCurriculum}
             onGenerateQuestions={handleGenerateQuestions}
+            onUploadMaterial={handleUploadMaterial}
+            onClearUploadedFile={() => setUploadedFileInfo(null)}
+            isUploadingMaterial={isUploadingMaterial}
+            uploadedFileInfo={uploadedFileInfo}
             isDeriving={isDeriving}
             isGenerating={isGenerating}
             generationStep={generationStep}

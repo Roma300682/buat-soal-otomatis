@@ -1,11 +1,21 @@
 import React, { useState } from 'react';
-import { Printer, Download, FileSpreadsheet, FileJson } from 'lucide-react';
+import {
+  Printer,
+  FileSpreadsheet,
+  FileJson,
+  FileText,
+  Download,
+} from 'lucide-react';
 import {
   CurriculumConfig,
   QuestionItem,
   StudentResponse,
   TestEmpiricalSummary,
 } from '../types/assessment';
+import {
+  downloadAssessmentExcel,
+  downloadAssessmentWord,
+} from '../utils/exportDocuments';
 
 interface ExportPrintViewProps {
   config: CurriculumConfig;
@@ -27,9 +37,28 @@ export const ExportPrintView: React.FC<ExportPrintViewProps> = ({
   summary,
 }) => {
   const [docType, setDocType] = useState<PrintDocumentType>('naskah-ujian');
+  const [isExportingWord, setIsExportingWord] = useState(false);
 
   const handlePrintWindow = () => {
     window.print();
+  };
+
+  const handleDownloadExcel = () => {
+    downloadAssessmentExcel({ config, items, students, summary });
+  };
+
+  const handleDownloadWord = async (targetDoc: PrintDocumentType | 'paket-lengkap') => {
+    setIsExportingWord(true);
+    try {
+      await downloadAssessmentWord({
+        config,
+        items,
+        summary,
+        docType: targetDoc,
+      });
+    } finally {
+      setIsExportingWord(false);
+    }
   };
 
   const handleExportProjectJSON = () => {
@@ -105,33 +134,62 @@ export const ExportPrintView: React.FC<ExportPrintViewProps> = ({
     <div className="space-y-6">
       {/* Control Panel (No Print) */}
       <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-5 no-print">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
           <div>
             <h1 className="text-xl font-bold text-slate-900">
-              Pusat Cetak Dokumen Resmi &amp; Ekspor Data Asesmen
+              Pusat Cetak Dokumen Resmi &amp; Ekspor Excel / Word
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
-              Pilih jenis dokumen di bawah ini lalu klik <strong>Cetak / Simpan PDF</strong> atau unduh laporan statistik CSV.
+              Unduh seluruh hasil dalam format <strong>Excel (.xlsx)</strong>, <strong>Word (.docx)</strong>, <strong>CSV</strong>, atau <strong>Cetak / Simpan PDF</strong>.
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleDownloadExcel}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors cursor-pointer"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-emerald-700" />
+              <span>Download Excel (.xlsx)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleDownloadWord(docType)}
+              disabled={isExportingWord}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-sky-800 bg-sky-50 border border-sky-200 rounded-lg hover:bg-sky-100 transition-colors cursor-pointer disabled:opacity-50"
+            >
+              <FileText className="w-4 h-4 text-sky-700" />
+              <span>Download Word Dokumen Ini (.docx)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleDownloadWord('paket-lengkap')}
+              disabled={isExportingWord}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-slate-900 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer disabled:opacity-50"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Download Word Lengkap (.docx)</span>
+            </button>
+
             <button
               type="button"
               onClick={handleExportItemAnalysisCSV}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors cursor-pointer"
             >
               <FileSpreadsheet className="w-3.5 h-3.5" />
-              <span>Unduh Tabel Anates (CSV)</span>
+              <span>CSV</span>
             </button>
 
             <button
               type="button"
               onClick={handleExportProjectJSON}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors cursor-pointer"
             >
               <FileJson className="w-3.5 h-3.5" />
-              <span>Cadangkan Proyek (JSON)</span>
+              <span>JSON</span>
             </button>
 
             <button
@@ -140,7 +198,7 @@ export const ExportPrintView: React.FC<ExportPrintViewProps> = ({
               className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-sky-600 rounded-lg hover:bg-sky-700 transition-colors cursor-pointer"
             >
               <Printer className="w-4 h-4" />
-              <span>Cetak / Simpan PDF Dokumen Ini</span>
+              <span>Cetak / PDF</span>
             </button>
           </div>
         </div>
@@ -159,7 +217,7 @@ export const ExportPrintView: React.FC<ExportPrintViewProps> = ({
               key={id}
               type="button"
               onClick={() => setDocType(id)}
-              className={`px-3.5 py-2 text-xs font-semibold rounded-md transition-colors whitespace-nowrap ${
+              className={`px-3.5 py-2 text-xs font-semibold rounded-md transition-colors whitespace-nowrap cursor-pointer ${
                 docType === id
                   ? 'bg-white text-slate-900 shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
@@ -333,7 +391,7 @@ export const ExportPrintView: React.FC<ExportPrintViewProps> = ({
           <div className="space-y-5 text-xs">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 border border-slate-300 font-mono tabular-nums">
               <div>
-                <div className="text-slate-500">Jumlah Peserta ($N$)</div>
+                <div className="text-slate-500">Jumlah Peserta (<i>N</i>)</div>
                 <div className="text-base font-bold">{summary.jumlahSiswa} Siswa</div>
               </div>
               <div>
@@ -363,10 +421,10 @@ export const ExportPrintView: React.FC<ExportPrintViewProps> = ({
                   <th className="border border-slate-400 p-2 text-center">No</th>
                   <th className="border border-slate-400 p-2 text-left">Materi Spesifik</th>
                   <th className="border border-slate-400 p-2 text-center">Kunci</th>
-                  <th className="border border-slate-400 p-2 text-right">Indeks $P$</th>
-                  <th className="border border-slate-400 p-2 text-left">Tafsiran $P$</th>
-                  <th className="border border-slate-400 p-2 text-right">Daya Beda $D$</th>
-                  <th className="border border-slate-400 p-2 text-right">$r_{'{pbi}'}$</th>
+                  <th className="border border-slate-400 p-2 text-right">Indeks <i>P</i></th>
+                  <th className="border border-slate-400 p-2 text-left">Tafsiran <i>P</i></th>
+                  <th className="border border-slate-400 p-2 text-right">Daya Beda <i>D</i></th>
+                  <th className="border border-slate-400 p-2 text-right"><i>r</i><sub>pbi</sub></th>
                   <th className="border border-slate-400 p-2 text-left">Validitas</th>
                   <th className="border border-slate-400 p-2 text-left">Keputusan Akhir</th>
                 </tr>

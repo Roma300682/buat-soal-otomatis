@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+import mammoth from 'mammoth';
 import { GoogleGenAI, Type } from '@google/genai';
 import {
   buildFallbackCurriculum,
@@ -28,18 +29,16 @@ function getGenAIClient() {
   });
 }
 
-// Daftar model dengan kuota terpisah untuk rotasi otomatis tanpa gagal
+// Daftar model valid sesuai panduan SDK terbaru dengan rotasi otomatis
 const MODEL_FALLBACK_CHAIN = [
-  'gemini-2.5-flash',
-  'gemini-flash-latest',
-  'gemini-3-flash-preview',
-  'gemini-3.8-flash',
+  'gemini-4-hydrogen',
+  'gemini-3.1-flash-lite',
 ] as const;
 
 async function generateContentWithModelFallback(
   ai: GoogleGenAI,
   params: {
-    contents: string;
+    contents: any;
     systemInstruction: string;
     responseSchema: any;
   }
@@ -70,11 +69,220 @@ async function generateContentWithModelFallback(
   throw lastError || new Error('Seluruh model dalam antrean fallback tidak merespons.');
 }
 
+function cleanFileTitle(fileName: string): string {
+  return fileName
+    .replace(/\.[^/.]+$/, '')
+    .replace(/[_\-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function extractReadableTextFromPdfBuffer(buffer: Buffer): string {
+  const raw = buffer.toString('latin1');
+  const chunks: string[] = [];
+  const tjMatches = raw.match(/\(([^()\\]{4,300})\)\s*T[jJ]/g) || [];
+  for (const m of tjMatches) {
+    const inner = m.replace(/^\(/, '').replace(/\)\s*T[jJ]$/, '');
+    const cleaned = inner.replace(/[^\x20-\x7E\u00A0-\u024F\s]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (cleaned.length >= 4) chunks.push(cleaned);
+  }
+  return chunks.join(' ').slice(0, 6000).trim();
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json({ limit: '10mb' }));
+  app.use(express.json({ limit: '25mb' }));
+
+  // 0. Endpoint: Upload & Ekstrak Materi Pembelajaran (PDF, DOCX, TXT, MD, CSV, atau Gambar Halaman Bahan Ajar)
+  app.post('/api/assessment/parse-material', async (req, res) => {
+    const {
+      fileName,
+      mimeType,
+      base64Data,
+      textContent,
+      mataPelajaran,
+      jenjangFase,
+      kelasSemester,
+    } = req.body || {};
+
+    if (!fileName || (!base64Data && typeof textContent !== 'string')) {
+      res.status(400).json({ error: 'Berkas materi atau konten teks tidak ditemukan.' });
+      return;
+    }
+
+    const lowerName = String(fileName).toLowerCase();
+    const fallbackTitle = cleanFileTitle(String(fileName)) || 'Materi Akuntansi & Keuangan';
+    let extractedRawText = typeof textContent === 'string' ? textContent.trim() : '';
+
+    try {
+      // 1) Ekstraksi lokal cepat untuk DOCX, TXT, MD, CSV
+      if (
+        lowerName.endsWith('.docx') ||
+        mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      ) {
+        if (base64Data) {
+          const buffer = Buffer.from(base64Data, 'base64');
+          const result = await mammoth.extractRawText({ buffer });
+          extractedRawText = (result.value || '').trim();
+        }
+      } else if (
+        lowerName.endsWith('.txt') ||
+        lowerName.endsWith('.md') ||
+        lowerName.endsWith('.csv') ||
+        String(mimeType || '').startsWith('text/')
+      ) {
+        if (!extractedRawText && base64Data) {
+          extractedRawText = Buffer.from(base64Data, 'base64').toString('utf-8').trim();
+        }
+      }
+
+      const isMultimodalDoc =
+        lowerName.endsWith('.pdf') ||
+        mimeType === 'application/pdf' ||
+        String(mimeType || '').startsWith('image/');
+
+      const localDerived = buildFallbackCurriculum({
+        mataPelajaran,
+        jenjangFase,
+        kelasSemester,
+        materiPokok: fallbackTitle,
+        ringkasanMateri: extractedRawText || undefined,
+      });
+
+      // 2) Gunakan Gemini Multimodal / Text untuk merapikan Materi Pokok, Ringkasan Materi & CP/TP/ATP
+      try {
+        const ai = getGenAIClient();
+        const extractionPrompt = `Anda adalah Pakar Kurikulum Merdeka dan Pengembang Instrumen Asesmen Pendidikan.
+Analisislah dokumen/file materi pembelajaran berikut dan ekstrak isinya menjadi perangkat siap pakai untuk penyusunan soal Pilihan Ganda:
+
+Informasi Konteks:
+- Nama File: ${fileName}
+- Mata Pelajaran Saat Ini: ${mataPelajaran || 'Akuntansi & Keuangan Lembaga'}
+- Jenjang / Fase: ${jenjangFase || 'Fase F (Kelas 11-12 SMA/SMK)'}
+- Kelas / Semester: ${kelasSemester || 'XI AKL / Ganjil'}
+
+Tugas Anda:
+1. "materiPokok": Tentukan judul Materi Pokok yang paling spesifik dan akurat dari isi dokumen.
+2. "ringkasanMateri": Ekstrak poin-poin materi, definisi, rumus, prosedur pencatatan/jurnal, angka contoh, dan konsep kunci secara padat, terstruktur, dan lengkap (maksimal 3500 karakter) agar siap dijadikan bahan stimulus soal.
+3. "capaianPembelajaran": Rumuskan CP Kurikulum Merdeka yang sesuai dengan isi materi pada dokumen.
+4. "tujuanPembelajaran": Rumuskan 3-4 poin Tujuan Pembelajaran (TP) terukur dari dokumen.
+5. "alurTujuanPembelajaran": Rumuskan tahapan ATP (L1 Pemahaman, L2 Penerapan, L3 Analisis/Evaluasi HOTS) berdasarkan dokumen.
+6. "detectedSubject": Nama mata pelajaran yang terdeteksi dari dokumen (atau pertahankan "${mataPelajaran || 'Akuntansi & Keuangan Lembaga'}").`;
+
+        const contentsPayload =
+          isMultimodalDoc && base64Data
+            ? {
+                parts: [
+                  {
+                    inlineData: {
+                      mimeType: mimeType || (lowerName.endsWith('.pdf') ? 'application/pdf' : 'image/png'),
+                      data: base64Data,
+                    },
+                  },
+                  {
+                    text: extractionPrompt,
+                  },
+                ],
+              }
+            : `${extractionPrompt}\n\n=== TEKS DOKUMEN BAHAN AJAR ===\n${extractedRawText.slice(0, 24000)}`;
+
+        const { response } = await generateContentWithModelFallback(ai, {
+          contents: contentsPayload,
+          systemInstruction:
+            'Anda adalah asisten ahli ekstraksi bahan ajar dan kurikulum Indonesia. Kembalikan JSON presisi sesuai skema.',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              materiPokok: { type: Type.STRING },
+              ringkasanMateri: { type: Type.STRING },
+              capaianPembelajaran: { type: Type.STRING },
+              tujuanPembelajaran: { type: Type.STRING },
+              alurTujuanPembelajaran: { type: Type.STRING },
+              detectedSubject: { type: Type.STRING },
+            },
+            required: [
+              'materiPokok',
+              'ringkasanMateri',
+              'capaianPembelajaran',
+              'tujuanPembelajaran',
+              'alurTujuanPembelajaran',
+            ],
+          },
+        });
+
+        const parsed = JSON.parse((response.text ?? '{}').trim());
+        res.json({
+          materiPokok: parsed.materiPokok || fallbackTitle,
+          ringkasanMateri:
+            parsed.ringkasanMateri || extractedRawText.slice(0, 6000) || localDerived.ringkasanMateri,
+          capaianPembelajaran: parsed.capaianPembelajaran || localDerived.capaianPembelajaran,
+          tujuanPembelajaran: parsed.tujuanPembelajaran || localDerived.tujuanPembelajaran,
+          alurTujuanPembelajaran:
+            parsed.alurTujuanPembelajaran || localDerived.alurTujuanPembelajaran,
+          detectedSubject: parsed.detectedSubject || mataPelajaran || '',
+          extractedChars: (parsed.ringkasanMateri || extractedRawText || '').length,
+          sourceMethod: 'ai',
+        });
+        return;
+      } catch (_aiErr) {
+        // Fallback tanpa error jika kuota API penuh atau dokumen diproses secara lokal
+        if (!extractedRawText && lowerName.endsWith('.pdf') && base64Data) {
+          extractedRawText = extractReadableTextFromPdfBuffer(Buffer.from(base64Data, 'base64'));
+        }
+
+        const fallbackSummary =
+          extractedRawText.length > 20
+            ? extractedRawText.slice(0, 8000)
+            : localDerived.ringkasanMateri;
+
+        const firstMeaningfulLine = extractedRawText
+          .split(/\r?\n/)
+          .map((l) => l.trim())
+          .find((l) => l.length >= 6 && l.length <= 110);
+
+        const resolvedTopic = firstMeaningfulLine || fallbackTitle;
+        const refinedCurriculum = buildFallbackCurriculum({
+          mataPelajaran,
+          jenjangFase,
+          kelasSemester,
+          materiPokok: resolvedTopic,
+          ringkasanMateri: fallbackSummary,
+        });
+
+        res.json({
+          materiPokok: resolvedTopic,
+          ringkasanMateri: fallbackSummary,
+          capaianPembelajaran: refinedCurriculum.capaianPembelajaran,
+          tujuanPembelajaran: refinedCurriculum.tujuanPembelajaran,
+          alurTujuanPembelajaran: refinedCurriculum.alurTujuanPembelajaran,
+          detectedSubject: mataPelajaran || '',
+          extractedChars: fallbackSummary.length,
+          sourceMethod: 'local',
+        });
+      }
+    } catch (err: any) {
+      console.error('Error in /api/assessment/parse-material:', err);
+      const safeCurriculum = buildFallbackCurriculum({
+        mataPelajaran,
+        jenjangFase,
+        kelasSemester,
+        materiPokok: fallbackTitle,
+        ringkasanMateri: extractedRawText || undefined,
+      });
+      res.json({
+        materiPokok: fallbackTitle,
+        ringkasanMateri: extractedRawText || safeCurriculum.ringkasanMateri,
+        capaianPembelajaran: safeCurriculum.capaianPembelajaran,
+        tujuanPembelajaran: safeCurriculum.tujuanPembelajaran,
+        alurTujuanPembelajaran: safeCurriculum.alurTujuanPembelajaran,
+        detectedSubject: mataPelajaran || '',
+        extractedChars: (extractedRawText || safeCurriculum.ringkasanMateri).length,
+        sourceMethod: 'local',
+      });
+    }
+  });
 
   // 1. Endpoint: Ekstrak / Turunkan CP, TP, dan ATP otomatis hanya dari Materi Pokok (Zero-Error Guarantee)
   app.post('/api/assessment/derive-curriculum', async (req, res) => {

@@ -332,13 +332,27 @@ export function buildFallbackQuestions(config: any, jumlahSoal: number, jumlahOp
     .map((s) => s.replace(/^[0-9\-*•()\s]+/, '').trim())
     .filter((s) => s.length >= 18);
 
-  if (concepts.length === 0) {
-    concepts.push(
-      `Pengakuan dan pengukuran transaksi pada ${topik} wajib didasarkan pada bukti transaksi yang sah dan aturan saldo normal akun`,
-      `Perhitungan nilai bersih dan penyesuaian akhir periode pada ${topik} menentukan keakuratan laba bersih perusahaan`,
-      `Penyajian akun-akun terkait ${topik} pada laporan keuangan harus mematuhi prinsip keseimbangan Aset = Liabilitas + Ekuitas`,
-      `Evaluasi pengendalian internal dan koreksi kesalahan pencatatan pada ${topik} mencegah salah saji material pada laporan keuangan`
+  const isAccountingDomain =
+    /akuntansi|keuangan|jurnal|neraca|kas kecil|rekonsiliasi|piutang|persediaan|aset tetap|penyusutan|pajak|pph|ppn|biaya|manufaktur|dagang|perusahaan jasa|laba|rugi|hpp|buku besar|spreadsheet/i.test(
+      `${mapel} ${topik} ${rawSummary}`
     );
+
+  if (concepts.length === 0) {
+    if (isAccountingDomain) {
+      concepts.push(
+        `Pengakuan dan pengukuran transaksi pada ${topik} wajib didasarkan pada bukti transaksi yang sah dan aturan saldo normal akun`,
+        `Perhitungan nilai bersih dan penyesuaian akhir periode pada ${topik} menentukan keakuratan laba bersih perusahaan`,
+        `Penyajian akun-akun terkait ${topik} pada laporan keuangan harus mematuhi prinsip keseimbangan Aset = Liabilitas + Ekuitas`,
+        `Evaluasi pengendalian internal dan koreksi kesalahan pencatatan pada ${topik} mencegah salah saji material pada laporan keuangan`
+      );
+    } else {
+      concepts.push(
+        `Pemahaman konsep dasar, karakteristik, dan ruang lingkup utama dari ${topik} pada mata pelajaran ${mapel}`,
+        `Penerapan langkah prosedural dan pemecahan masalah kontekstual pada ${topik} secara sistematis`,
+        `Analisis hubungan sebab-akibat antarvariabel serta interpretasi data pada kajian ${topik}`,
+        `Evaluasi ketepatan kesimpulan dan pengambilan keputusan berdasarkan bukti ilmiah pada materi ${topik}`
+      );
+    }
   }
 
   const countL1 = Math.round((jumlahSoal * (Number(config.proporsiL1) || 20)) / 100);
@@ -498,7 +512,135 @@ export function buildFallbackQuestions(config: any, jumlahSoal: number, jumlahOp
     },
   ];
 
+  const generalScenarioTemplates = [
+    {
+      aspect: 'Pemahaman Konsep Esensial & Karakteristik Dasar',
+      stimulusType: 'Wacana Konseptual Bahan Ajar',
+      makeQuestion: (no: number, concept: string) => ({
+        materiSpesifik: `${topik} — Pemahaman Konsep (#${no})`,
+        bentukStimulus: 'Kutipan Konsep Bahan Ajar',
+        indikatorSoal: `Disajikan kutipan prinsip dasar mengenai ${topik} pada mata pelajaran ${mapel}, peserta didik dapat menjelaskan makna dan implikasi konsep tersebut dengan tepat.`,
+        stimulus: `Perhatikan kutipan konsep pada bahan ajar ${mapel} tentang ${topik} berikut ini:\n"${concept}."`,
+        pokokSoal: `Berdasarkan kutipan materi ${topik} tersebut, pernyataan konseptual yang paling tepat menjelaskan prinsip utamanya adalah ....`,
+        correctText: `Prinsip tersebut menegaskan keterkaitan langsung antara konsep "${concept.slice(0, 90)}" dengan penerapan kaidah keilmuan ${mapel} secara sistematis`,
+        distractors: [
+          {
+            teks: `Konsep tersebut berlaku secara terpisah tanpa memengaruhi komponen lain dalam kajian ${topik}`,
+            rasional: 'Miskonsepsi parsial: memandang komponen konsep berdiri sendiri tanpa keterkaitan sistem.',
+          },
+          {
+            teks: `Penerapan konsep pada ${topik} mengabaikan prosedur verifikasi fakta atau data pendukung`,
+            rasional: 'Bertentangan dengan pendekatan ilmiah dan sistematis pada mata pelajaran terkait.',
+          },
+          {
+            teks: `Prinsip utama ${topik} hanya digunakan sebagai definisi teoretis tanpa fungsi praktis di lapangan`,
+            rasional: 'Kekeliruan membedakan teori dasar dengan penerapannya dalam konteks nyata.',
+          },
+          {
+            teks: `Seluruh komponen pada ${topik} dapat disimpulkan secara terbalik tanpa mengubah makna aslinya`,
+            rasional: 'Kesalahan logika konversi hubungan sebab-akibat antarkonsep.',
+          },
+        ],
+        pembahasan: `Pernyataan kunci pada materi ${topik} ("${concept}") menunjukkan bahwa setiap elemen memiliki peran sistematis sesuai kaidah ${mapel}.`,
+      }),
+    },
+    {
+      aspect: 'Penerapan Prosedural & Pemecahan Masalah Kontekstual',
+      stimulusType: 'Studi Kasus Penerapan Materi',
+      makeQuestion: (no: number, concept: string) => ({
+        materiSpesifik: `${topik} — Penerapan Kasus (#${no})`,
+        bentukStimulus: 'Kasus Kontekstual Lapangan',
+        indikatorSoal: `Disajikan studi kasus kontekstual yang melibatkan konsep ${topik}, peserta didik dapat menentukan langkah penerapan prosedur yang paling tepat.`,
+        stimulus: `Dalam kegiatan praktikum / studi lapangan ${mapel} topik ${topik} (Kasus #${no}), ditemukan situasi di mana seorang peserta didik harus menerapkan prinsip: "${concept}."`,
+        pokokSoal: `Langkah penerapan prosedural yang paling tepat dilakukan untuk menyelesaikan permasalahan pada kasus ${topik} tersebut adalah ....`,
+        correctText: `Menerapkan langkah sistematis sesuai kaidah "${concept.slice(0, 85)}" dengan memverifikasi parameter awal dan mengecek kesesuaian hasil akhir`,
+        distractors: [
+          {
+            teks: `Melewatkan tahap identifikasi kondisi awal dan langsung menetapkan kesimpulan akhir tanpa pengujian`,
+            rasional: 'Kesalahan prosedural karena mengabaikan tahapan verifikasi syarat awal.',
+          },
+          {
+            teks: `Menggunakan aturan dari topik yang berbeda tanpa menyesuaikan dengan kondisi kasus ${topik}`,
+            rasional: 'Miskonsepsi generalisasi berlebih: menerapkan prosedur yang tidak sesuai konteks.',
+          },
+          {
+            teks: `Mengubah urutan langkah utama secara acak sehingga mengabaikan hubungan prasyarat antartahap`,
+            rasional: 'Melanggar urutan prosedural logis dalam pemecahan masalah.',
+          },
+          {
+            teks: `Membiarkan ketidaksesuaian data lapangan tanpa melakukan penyesuaian terhadap konsep ${topik}`,
+            rasional: 'Tidak melakukan kontrol kualitas terhadap keakuratan hasil penerapan.',
+          },
+        ],
+        pembahasan: `Penyelesaian kasus ${topik} menuntut ketepatan urutan prosedur yang berlandaskan prinsip "${concept}" serta verifikasi hasil.`,
+      }),
+    },
+    {
+      aspect: 'Analisis Hubungan Sebab-Akibat & Penalaran HOTS',
+      stimulusType: 'Analisis Data & Fenomena Kritis',
+      makeQuestion: (no: number, concept: string) => ({
+        materiSpesifik: `${topik} — Analisis Kritis HOTS (#${no})`,
+        bentukStimulus: 'Skenario Analisis Masalah',
+        indikatorSoal: `Disajikan permasalahan kompleks terkait ${topik}, peserta didik dapat menganalisis hubungan sebab-akibat dan dampaknya secara kritis.`,
+        stimulus: `Sebuah tim pengkaji ${mapel} melakukan telaah terhadap implementasi ${topik} (Fokus #${no}). Dari hasil observasi ditemukan gejala penyimpangan terhadap kaidah berikut: "${concept}."`,
+        pokokSoal: `Berdasarkan analisis hubungan sebab-akibat pada kasus ${topik} tersebut, dampak utama yang paling mungkin terjadi apabila penyimpangan tidak segera diperbaiki adalah ....`,
+        correctText: `Terjadi ketidaksesuaian pada hasil akhir proses ${topik} sehingga kesimpulan analisis menjadi tidak akurat dan menyimpang dari kaidah "${concept.slice(0, 75)}"`,
+        distractors: [
+          {
+            teks: `Kualitas hasil tetap optimal selama jumlah komponen yang terlibat tidak mengalami perubahan kuantitas`,
+            rasional: 'Miskonsepsi yang hanya menilai kuantitas tanpa memperhatikan kebenaran proses.',
+          },
+          {
+            teks: `Penyimpangan akan terkoreksi dengan sendirinya pada tahap akhir tanpa perlu tindakan perbaikan`,
+            rasional: 'Kesalahan analisis sistem: galat awal justru terakumulasi ke tahap berikutnya.',
+          },
+          {
+            teks: `Dampaknya hanya memengaruhi aspek definisi bahasa tanpa mengubah validitas kesimpulan`,
+            rasional: 'Meremehkan pengaruh substansi prosedur terhadap validitas hasil.',
+          },
+          {
+            teks: `Hasil analisis meningkat dua kali lebih baik karena penyederhanaan tahapan kerja`,
+            rasional: 'Kesalahan logika: pengabaian kaidah ilmiah bukan merupakan efisiensi yang valid.',
+          },
+        ],
+        pembahasan: `Secara analitis, pelanggaran terhadap prinsip "${concept}" berdampak langsung pada turunnya validitas dan akurasi keluaran pada materi ${topik}.`,
+      }),
+    },
+    {
+      aspect: 'Evaluasi Kritis & Pengambilan Keputusan HOTS',
+      stimulusType: 'Evaluasi Klaim / Solusi Alternatif',
+      makeQuestion: (no: number, concept: string) => ({
+        materiSpesifik: `${topik} — Evaluasi & Validasi (#${no})`,
+        bentukStimulus: 'Perbandingan Argumen & Evaluasi Solusi',
+        indikatorSoal: `Disajikan pernyataan atau keputusan terkait ${topik}, peserta didik dapat mengevaluasi ketepatan argumen dan merumuskan rekomendasi terbaik.`,
+        stimulus: `Dalam diskusi kelas ${mapel} mengenai ${topik} (#${no}), dua kelompok mengajukan kesimpulan berbeda tentang penerapan prinsip: "${concept}." Kelompok A menekankan validasi berbasis bukti dan kaidah baku, sedangkan Kelompok B memilih jalan pintas tanpa verifikasi.`,
+        pokokSoal: `Evaluasi yang paling tepat terhadap argumen kedua kelompok berdasarkan standar keilmuan ${topik} adalah ....`,
+        correctText: `Keputusan Kelompok A lebih valid dan dapat dipertanggungjawabkan karena memenuhi seluruh indikator keakuratan pada prinsip "${concept.slice(0, 75)}"`,
+        distractors: [
+          {
+            teks: `Keputusan Kelompok B lebih tepat karena menghemat waktu pengerjaan meskipun mengabaikan validasi bukti`,
+            rasional: 'Keliru menukar ketepatan ilmiah dengan sekadar kecepatan tanpa akurasi.',
+          },
+          {
+            teks: `Kedua kelompok memiliki tingkat kebenaran yang sama karena merujuk pada judul topik yang sama`,
+            rasional: 'Tidak mampu membedakan argumen yang didukung bukti dengan argumen spekulatif.',
+          },
+          {
+            teks: `Keputusan Kelompok A salah karena terlalu terikat pada verifikasi data pendukung`,
+            rasional: 'Miskonsepsi terhadap fungsi verifikasi dan kontrol kualitas dalam analisis.',
+          },
+          {
+            teks: `Evaluasi tidak dapat dilakukan karena konsep pada ${topik} bersifat subjektif bagi setiap pengamat`,
+            rasional: 'Mengabaikan adanya kriteria objektif pada mata pelajaran terkait.',
+          },
+        ],
+        pembahasan: `Dalam level kognitif C5 (Evaluasi), penilaian terhadap suatu solusi harus berpijak pada kriteria objektif dan keterpenuhan kaidah ("${concept}").`,
+      }),
+    },
+  ];
+
   const items = [];
+  const activeTemplates = isAccountingDomain ? scenarioTemplates : generalScenarioTemplates;
 
   for (let i = 0; i < jumlahSoal; i++) {
     const nomor = i + 1;
@@ -531,7 +673,7 @@ export function buildFallbackQuestions(config: any, jumlahSoal: number, jumlahOp
         : i % 2 === 0
         ? 2
         : 3;
-    const tpl = scenarioTemplates[tplIdx];
+    const tpl = activeTemplates[tplIdx];
     const generated = tpl.makeQuestion(nomor, concept);
 
     const keyIdx = (i * 2 + 1) % labels.length;
@@ -544,7 +686,7 @@ export function buildFallbackQuestions(config: any, jumlahSoal: number, jumlahOp
           label: lbl,
           teks: generated.correctText,
           isKey: true,
-          rasionalPengecoh: `Kunci Jawaban Benar: Sesuai dengan kaidah akuntansi dan perhitungan sistematis pada materi ${topik}.`,
+          rasionalPengecoh: `Kunci Jawaban Benar: Sesuai dengan kaidah dan analisis sistematis pada materi ${topik}.`,
         };
       } else {
         const d = generated.distractors[distCursor % generated.distractors.length];
@@ -563,10 +705,10 @@ export function buildFallbackQuestions(config: any, jumlahSoal: number, jumlahOp
       cpRef: config.capaianPembelajaran || derived.capaianPembelajaran,
       tpRef:
         levelKognitif === 'L1'
-          ? `TP 1: Memahami konsep dan klasifikasi akun pada ${topik}`
+          ? `TP 1: Memahami konsep dasar dan karakteristik pada ${topik}`
           : levelKognitif === 'L2'
-          ? `TP 2: Menerapkan perhitungan dan penjurnalan transaksi pada ${topik}`
-          : `TP 3: Menganalisis penyesuaian dan mengevaluasi pelaporan keuangan pada ${topik}`,
+          ? `TP 2: Menerapkan prosedur dan pemecahan masalah pada ${topik}`
+          : `TP 3: Menganalisis kasus dan mengevaluasi kesimpulan pada ${topik}`,
       atpRef: `ATP.${nomor}: ${tpl.aspect} (${levelKognitif} - ${dimensiBloom})`,
       materiSpesifik: generated.materiSpesifik,
       bentukStimulus: generated.bentukStimulus,

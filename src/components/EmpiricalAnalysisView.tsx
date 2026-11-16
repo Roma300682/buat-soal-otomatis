@@ -11,6 +11,8 @@ import {
   AlertTriangle,
   XOctagon,
   SlidersHorizontal,
+  FileSpreadsheet,
+  FileText,
 } from 'lucide-react';
 import {
   CurriculumConfig,
@@ -21,6 +23,10 @@ import {
   TestEmpiricalSummary,
 } from '../types/assessment';
 import { scoreAndRankStudents } from '../utils/psychometrics';
+import {
+  downloadAssessmentExcel,
+  downloadAssessmentWord,
+} from '../utils/exportDocuments';
 
 interface EmpiricalAnalysisViewProps {
   config: CurriculumConfig;
@@ -213,22 +219,22 @@ export const EmpiricalAnalysisView: React.FC<EmpiricalAnalysisViewProps> = ({
               Laboratorium Analisis Butir Soal Statistik Empiris
             </h1>
             <p className="text-xs text-slate-600 mt-1">
-              Responden: <strong className="font-mono tabular-nums">{summary.jumlahSiswa} Siswa</strong> (Kelompok Atas 27% = {summary.ukuranKelompokAtasBawah} siswa, Kelompok Bawah 27% = {summary.ukuranKelompokAtasBawah} siswa) · Nilai kritis $r_{'{tabel}'}$ ($\alpha=0.05$) ={' '}
+              Responden: <strong className="font-mono tabular-nums">{summary.jumlahSiswa} Siswa</strong> (Kelompok Atas 27% = {summary.ukuranKelompokAtasBawah} siswa, Kelompok Bawah 27% = {summary.ukuranKelompokAtasBawah} siswa) · Nilai kritis <i>r</i><sub>tabel</sub> (α = 0,05) ={' '}
               <strong className="font-mono tabular-nums">
                 {summary.butirStats[0]?.rTabelAlpha05 ?? 0.361}
               </strong>
             </p>
           </div>
 
-          {/* Generator Cepat Kohort Siswa */}
+          {/* Generator Cepat Kohort Siswa & Ekspor Excel/Word */}
           <div className="flex flex-wrap items-center gap-2 shrink-0 no-print">
-            <span className="text-xs font-medium text-slate-500">Simulasi Kohort Cepat:</span>
+            <span className="text-xs font-medium text-slate-500">Simulasi Kohort:</span>
             {[15, 30, 40].map((cnt) => (
               <button
                 key={cnt}
                 type="button"
                 onClick={() => onRegenerateCohort(cnt)}
-                className={`px-3 py-1.5 text-xs font-mono tabular-nums font-semibold rounded-lg border transition-colors ${
+                className={`px-3 py-1.5 text-xs font-mono tabular-nums font-semibold rounded-lg border transition-colors cursor-pointer ${
                   students.length === cnt
                     ? 'bg-sky-50 border-sky-600 text-sky-900'
                     : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
@@ -237,6 +243,31 @@ export const EmpiricalAnalysisView: React.FC<EmpiricalAnalysisViewProps> = ({
                 {cnt} Siswa
               </button>
             ))}
+            <button
+              type="button"
+              onClick={() =>
+                downloadAssessmentExcel({ config, items, students, summary })
+              }
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors cursor-pointer"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+              <span>Excel (.xlsx)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                downloadAssessmentWord({
+                  config,
+                  items,
+                  summary,
+                  docType: 'laporan-anates',
+                })
+              }
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-sky-800 bg-sky-50 border border-sky-200 rounded-lg hover:bg-sky-100 transition-colors cursor-pointer"
+            >
+              <FileText className="w-3.5 h-3.5 text-sky-700" />
+              <span>Word (.docx)</span>
+            </button>
           </div>
         </div>
 
@@ -255,7 +286,7 @@ export const EmpiricalAnalysisView: React.FC<EmpiricalAnalysisViewProps> = ({
               </span>
             </div>
             <p className="mt-1 text-[11px] text-slate-500">
-              Konsistensi internal Kuder-Richardson 20 ($\ge 0.70$ Reliabel)
+              Konsistensi internal Kuder-Richardson 20 (≥ 0,70 Reliabel)
             </p>
           </div>
 
@@ -293,7 +324,7 @@ export const EmpiricalAnalysisView: React.FC<EmpiricalAnalysisViewProps> = ({
               </span>
             </div>
             <p className="mt-1 text-[11px] text-slate-500">
-              ● VALID: Daya beda $D \ge 0.30$ &amp; seluruh pengecoh efektif
+              ● VALID: Daya beda <i>D</i> ≥ 0,30 &amp; seluruh pengecoh efektif
             </p>
           </div>
 
@@ -328,7 +359,7 @@ export const EmpiricalAnalysisView: React.FC<EmpiricalAnalysisViewProps> = ({
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            1. Tabel Indeks Kesukaran ($P$), Daya Beda ($D$) &amp; Validitas ($r_{'{pbi}'}$)
+            1. Tabel Indeks Kesukaran (<i>P</i>), Daya Beda (<i>D</i>) &amp; Validitas (<i>r</i><sub>pbi</sub>)
           </button>
           <button
             type="button"
@@ -373,7 +404,7 @@ export const EmpiricalAnalysisView: React.FC<EmpiricalAnalysisViewProps> = ({
                 Rekapitulasi Parameter Psikometri Per Butir Soal
               </h2>
               <p className="text-xs text-slate-500">
-                Rumus: $P = B / N$ · $D = P_A - P_B$ (27% Atas vs 27% Bawah) · $r_{'{pbi}'} = ((M_p - M_t)/SD_t)\sqrt{'{p/q}'}$
+                Rumus: <i>P</i> = <i>B</i> / <i>N</i> · <i>D</i> = <i>P</i><sub>A</sub> − <i>P</i><sub>B</sub> (27% Atas vs 27% Bawah) · <i>r</i><sub>pbi</sub> = ((<i>M</i><sub>p</sub> − <i>M</i><sub>t</sub>) / SD<sub>t</sub>) × √(<i>p</i>/<i>q</i>)
               </p>
             </div>
           </div>
@@ -385,10 +416,10 @@ export const EmpiricalAnalysisView: React.FC<EmpiricalAnalysisViewProps> = ({
                   <th className="py-3 px-3 text-center w-12">No</th>
                   <th className="py-3 px-3">Sub-Materi &amp; Level</th>
                   <th className="py-3 px-3 text-center">Kunci</th>
-                  <th className="py-3 px-3 text-right">Benar ($B/N$)</th>
-                  <th className="py-3 px-3 text-right">Tingkat Kesukaran ($P$)</th>
-                  <th className="py-3 px-3 text-right">Daya Pembeda ($D$)</th>
-                  <th className="py-3 px-3 text-right">Validitas ($r_{'{pbi}'}$)</th>
+                  <th className="py-3 px-3 text-right">Benar (<i>B</i>/<i>N</i>)</th>
+                  <th className="py-3 px-3 text-right">Tingkat Kesukaran (<i>P</i>)</th>
+                  <th className="py-3 px-3 text-right">Daya Pembeda (<i>D</i>)</th>
+                  <th className="py-3 px-3 text-right">Validitas (<i>r</i><sub>pbi</sub>)</th>
                   <th className="py-3 px-3">Pengecoh Lemah</th>
                   <th className="py-3 px-4">Keputusan &amp; Tindak Lanjut</th>
                   <th className="py-3 px-4 text-right no-print">Perbaikan AI</th>
@@ -583,9 +614,9 @@ export const EmpiricalAnalysisView: React.FC<EmpiricalAnalysisViewProps> = ({
                 <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-semibold text-slate-700">
                   <th className="py-3 px-4 w-16 text-center">Opsi</th>
                   <th className="py-3 px-4">Teks Pilihan Jawaban &amp; Rasional Miskonsepsi</th>
-                  <th className="py-3 px-3 text-right">Kel. Atas ($U$)</th>
+                  <th className="py-3 px-3 text-right">Kel. Atas (<i>U</i>)</th>
                   <th className="py-3 px-3 text-right">Kel. Tengah</th>
-                  <th className="py-3 px-3 text-right">Kel. Bawah ($L$)</th>
+                  <th className="py-3 px-3 text-right">Kel. Bawah (<i>L</i>)</th>
                   <th className="py-3 px-3 text-right">Total Pemilih</th>
                   <th className="py-3 px-4">Proporsi &amp; Efektivitas</th>
                 </tr>
@@ -677,7 +708,7 @@ export const EmpiricalAnalysisView: React.FC<EmpiricalAnalysisViewProps> = ({
                 <span>Matriks Jawaban &amp; Skor Siswa (Live Spreadsheet)</span>
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                Ubah huruf jawaban (A–{config.jumlahOpsi === 4 ? 'D' : 'E'}) langsung pada tabel di bawah; seluruh indeks $P$, $D$, $r_{'{pbi}'}$, dan KR-20 akan dihitung ulang seketika.
+                Ubah huruf jawaban (A–{config.jumlahOpsi === 4 ? 'D' : 'E'}) langsung pada tabel di bawah; seluruh indeks <i>P</i>, <i>D</i>, <i>r</i><sub>pbi</sub>, dan KR-20 akan dihitung ulang seketika.
               </p>
             </div>
 
